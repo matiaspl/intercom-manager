@@ -19,6 +19,8 @@ export const UserSettings: FC<UserSettingsProps> = (props) => {
     username: userSettings?.username,
     audioinput: userSettings?.audioinput,
     audiooutput: userSettings?.audiooutput,
+    backendUrl: userSettings?.backendUrl,
+    backendApiKey: userSettings?.backendApiKey,
   };
 
   return (

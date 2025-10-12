@@ -13,6 +13,12 @@ const HeaderWrapper = styled.div`
   margin: 0 0 1rem 0;
 `;
 
+const Bar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
 const HomeButton = styled.button`
   background: ${backgroundColour};
   border: none;
@@ -31,6 +37,17 @@ const HomeButton = styled.button`
     margin-right: 1rem;
     margin-left: 1rem;
     fill: #59cbe8;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 2.2rem;
+    padding: 0.8rem;
+    svg {
+      width: 2rem;
+      height: 2rem;
+      margin-left: 0.6rem;
+      margin-right: 0.6rem;
+    }
   }
 `;
 
@@ -71,10 +88,12 @@ export const Header: FC = () => {
   return (
     <>
       <HeaderWrapper>
-        <HomeButton onClick={returnToRoot}>
-          <HeadsetIcon />
-          Intercom
-        </HomeButton>
+        <Bar>
+          <HomeButton onClick={returnToRoot}>
+            <HeadsetIcon />
+            Intercom
+          </HomeButton>
+        </Bar>
       </HeaderWrapper>
       {confirmExitModalOpen && (
         <ConfirmationModal

@@ -1,10 +1,12 @@
 import { handleFetchRequest } from "./handle-fetch-request.ts";
+import { getApiBaseUrl, getApiKey } from "../config";
+import { httpRequest } from "../http";
 
-const API_VERSION = import.meta.env.VITE_BACKEND_API_VERSION ?? "api/v1/";
-const API_URL =
-  `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, "")}/${API_VERSION}` ||
-  `${window.location.origin}/${API_VERSION}`;
-const API_KEY = import.meta.env.VITE_BACKEND_API_KEY;
+const API_BASE = () => getApiBaseUrl();
+const authHeader = (): Record<string, string> => {
+  const key = getApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+};
 
 type TCreateProductionOptions = {
   name: string;
@@ -88,12 +90,9 @@ type TUpdateLineNameOptions = {
 export const API = {
   createProduction: async ({ name, lines }: TCreateProductionOptions) =>
     handleFetchRequest<TBasicProductionResponse>(
-      fetch(`${API_URL}production/`, {
+      httpRequest(`${API_BASE()}production/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           name,
           lines,
@@ -105,12 +104,9 @@ export const API = {
     name,
   }: TUpdateProductionNameOptions) =>
     handleFetchRequest<TBasicProductionResponse>(
-      fetch(`${API_URL}production/${productionId}`, {
+      httpRequest(`${API_BASE()}production/${productionId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           name,
         }),
@@ -122,12 +118,9 @@ export const API = {
     name,
   }: TUpdateLineNameOptions) =>
     handleFetchRequest<TBasicProductionResponse>(
-      fetch(`${API_URL}production/${productionId}/line/${lineId}`, {
+      httpRequest(`${API_BASE()}production/${productionId}/line/${lineId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           name,
         }),
@@ -139,47 +132,37 @@ export const API = {
     searchParams: string;
   }): Promise<TListProductionsResponse> =>
     handleFetchRequest<TListProductionsResponse>(
-      fetch(`${API_URL}productionlist?${searchParams}`, {
+      httpRequest(`${API_BASE()}productionlist?${searchParams}`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   fetchProduction: (id: number): Promise<TBasicProductionResponse> =>
     handleFetchRequest<TBasicProductionResponse>(
-      fetch(`${API_URL}production/${id}`, {
+      httpRequest(`${API_BASE()}production/${id}`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   deleteProduction: (id: string): Promise<string> =>
     handleFetchRequest<string>(
-      fetch(`${API_URL}production/${id}`, {
+      httpRequest(`${API_BASE()}production/${id}`, {
         method: "DELETE",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   listProductionLines: (id: number) =>
     handleFetchRequest<TLine[]>(
-      fetch(`${API_URL}production/${id}/line`, {
+      httpRequest(`${API_BASE()}production/${id}/line`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   fetchProductionLine: (productionId: number, lineId: number): Promise<TLine> =>
     handleFetchRequest<TLine>(
-      fetch(`${API_URL}production/${productionId}/line/${lineId}`, {
+      httpRequest(`${API_BASE()}production/${productionId}/line/${lineId}`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   addProductionLine: (
@@ -188,12 +171,9 @@ export const API = {
     programOutputLine?: boolean
   ): Promise<TLine> =>
     handleFetchRequest<TLine>(
-      fetch(`${API_URL}production/${productionId}/line`, {
+      httpRequest(`${API_BASE()}production/${productionId}/line`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           name,
           programOutputLine,
@@ -205,11 +185,9 @@ export const API = {
     lineId: string
   ): Promise<string> =>
     handleFetchRequest<string>(
-      fetch(`${API_URL}production/${productionId}/line/${lineId}`, {
+      httpRequest(`${API_BASE()}production/${productionId}/line/${lineId}`, {
         method: "DELETE",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
 
@@ -219,12 +197,9 @@ export const API = {
     username,
   }: TOfferAudioSessionOptions): Promise<TOfferAudioSessionResponse> =>
     handleFetchRequest<TOfferAudioSessionResponse>(
-      fetch(`${API_URL}session/`, {
+      httpRequest(`${API_BASE()}session/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           productionId,
           lineId,
@@ -237,12 +212,9 @@ export const API = {
     sdpAnswer,
   }: TPatchAudioSessionOptions): Promise<TPatchAudioSessionResponse> =>
     handleFetchRequest<TPatchAudioSessionResponse>(
-      fetch(`${API_URL}session/${sessionId}`, {
+      httpRequest(`${API_BASE()}session/${sessionId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           sdpAnswer,
         }),
@@ -252,30 +224,23 @@ export const API = {
     sessionId,
   }: TDeleteAudioSessionOptions): Promise<string> =>
     handleFetchRequest<string>(
-      fetch(`${API_URL}session/${sessionId}`, {
+      httpRequest(`${API_BASE()}session/${sessionId}`, {
         method: "DELETE",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   heartbeat: ({ sessionId }: THeartbeatOptions): Promise<string> =>
     handleFetchRequest<string>(
-      fetch(`${API_URL}heartbeat/${sessionId}`, {
+      httpRequest(`${API_BASE()}heartbeat/${sessionId}`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     ),
   shareUrl: ({ path }: TShareUrlOptions): Promise<TShareUrlResponse> => {
     return handleFetchRequest<TShareUrlResponse>(
-      fetch(`${API_URL}share`, {
+      httpRequest(`${API_BASE()}share`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({
           path,
         }),
@@ -284,11 +249,9 @@ export const API = {
   },
   reauth: async (): Promise<void> => {
     return handleFetchRequest<void>(
-      fetch(`${API_URL}reauth`, {
+      httpRequest(`${API_BASE()}reauth`, {
         method: "GET",
-        headers: {
-          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-        },
+        headers: { ...authHeader() },
       })
     );
   },

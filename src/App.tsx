@@ -22,6 +22,8 @@ import { useLocalUserSettings } from "./hooks/use-local-user-settings.ts";
 import { ManageProductionsPage } from "./components/manage-productions-page/manage-productions-page.tsx";
 import { CreateProductionPage } from "./components/create-production/create-production-page.tsx";
 import { useSetupTokenRefresh } from "./hooks/use-reauth.tsx";
+import { isMobileApp } from "./platform";
+import { BackendStatus } from "./components/backend-status/backend-status";
 import { TUserSettings } from "./components/user-settings/types";
 
 const DisplayBoxPositioningContainer = styled(FlexContainer)`
@@ -47,6 +49,12 @@ const NotFound = () => {
     </DisplayContainer>
   );
 };
+
+const StatusBar = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 0.4rem 1rem 0.8rem 1rem;
+`;
 
 type AppContentProps = {
   continueToApp: boolean;
@@ -79,6 +87,11 @@ const AppContent = ({
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Header />
+      {isMobileApp() && (
+        <StatusBar>
+          <BackendStatus />
+        </StatusBar>
+      )}
       <ErrorBanner />
 
       {!isValidBrowser && !continueToApp && (
@@ -128,14 +141,12 @@ const AppContent = ({
               />
             </DisplayBoxPositioningContainer>
           )}
-          {permission && !denied && !apiError && userSettings && (
+          {permission && !denied && userSettings && (
             <Routes>
               <>
                 <Route
                   path="/"
-                  element={
-                    <LandingPage setApiError={() => setApiError(true)} />
-                  }
+                  element={<LandingPage setApiError={setApiError} />}
                   errorElement={<ErrorPage />}
                 />
                 <Route
@@ -145,11 +156,7 @@ const AppContent = ({
                 />
                 <Route
                   path="/manage-productions"
-                  element={
-                    <ManageProductionsPage
-                      setApiError={() => setApiError(true)}
-                    />
-                  }
+                  element={<ManageProductionsPage setApiError={setApiError} />}
                   errorElement={<ErrorPage />}
                 />
                 <Route
@@ -169,7 +176,7 @@ const AppContent = ({
 
 const App = () => {
   const [unsupportedContinue, setUnsupportedContinue] = useState(false);
-  const continueToApp = isValidBrowser || unsupportedContinue;
+  const continueToApp = isValidBrowser || isMobileApp() || unsupportedContinue;
   const { denied, permission } = useDevicePermissions({ continueToApp });
   const initializedGlobalState = useInitializeGlobalStateReducer();
   const [{ devices, userSettings }, dispatch] = initializedGlobalState;

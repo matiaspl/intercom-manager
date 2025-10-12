@@ -11,10 +11,19 @@
     "preview": "vite preview",
     "pretty": "prettier --write --ignore-unknown .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push && git push --tags",
+    "cap:init": "cap init intercom-frontend com.eyevinn.intercom --web-dir=dist",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:copy": "cap copy",
+    "cap:open:android": "cap open android",
+    "cap:run:android": "cap run android -l --external",
+    "android:build": "yarn build && cap sync android",
+    "android:open": "cap open android"
   },
   "license": "MIT",
   "dependencies": {
+    "@capacitor/core": "^6.1.0",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
     "@eyevinn/media-event-filter": "^3.4.0",
@@ -29,6 +38,8 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/cli": "^6.1.0",
     "@commitlint/cli": "^19.3.0",
     "@commitlint/config-conventional": "^19.2.2",
     "@types/react": "^18.3.3",

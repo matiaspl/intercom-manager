@@ -26,7 +26,10 @@ Pre-requisites: [Node v20](https://nodejs.org/), [Yarn Classic](https://classic.
 
 `cp .env.local.sample .env.local` to set up the local environment (do not skip!)
 
-To use a local [Open Intercom Server](https://github.com/Eyevinn/intercom-manager/), set the environment variable `VITE_BACKEND_URL=http://0.0.0.0:8000/`
+To use a local [Open Intercom Server](https://github.com/Eyevinn/intercom-manager/), you can either:
+
+- Set the environment variable `VITE_BACKEND_URL=http://0.0.0.0:8000/` before build/dev, or
+- Configure the backend URL at runtime inside the app under User Settings (stored locally and used for all API calls).
 
 Decide whether or not debug mode should be on or not `VITE_DEBUG_MODE=true`
 
@@ -48,7 +51,7 @@ LOGGER LEVELS
 
 ### Open Intercom Server in Open Source Cloud
 
-To develop using a server hosted by [Open Source Cloud](https://www.osaas.io/), you need to provide a bearer token (service access token) in the Authorization header. The environment should be set to:
+To develop using a server hosted by [Open Source Cloud](https://www.osaas.io/), you need to provide a bearer token (service access token) in the Authorization header. You can either set it at runtime in User Settings (Backend API Key) or export it before starting:
 
 ```
 export VITE_BACKEND_URL=https://<instance>.eyevinn-intercom-manager.auto.prod.osaas.io/
@@ -75,7 +78,7 @@ You also need to update the `VITE_BACKEND_URL` to point to your instance in OSC 
 export VITE_BACKEND_URL=https://<instance>.eyevinn-intercom-manager.auto.dev.osaas.io/
 ```
 
-Then you start the dev server with the `VITE_BACKEND_API_KEY` environment variable set. Either on the comand line or stored in the shell with `export VITE_BACKEND_API_KEY=<service-access-token>`. The token expires after a while so you might need to refresh the token using the same command above.
+Then you start the dev server with the `VITE_BACKEND_API_KEY` environment variable set, or rely on the value set in User Settings. The token expires after a while so you might need to refresh the token using the same command above.
 
 ```bash
 % VITE_BACKEND_API_KEY=<service-access-token> yarn dev

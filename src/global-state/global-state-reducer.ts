@@ -65,6 +65,7 @@ const globalReducer: Reducer<TGlobalState, TGlobalStateAction> = (
       return {
         ...state,
         reloadProductionList: false,
+        apiError: false,
       };
     case "DEVICES_UPDATED":
       return {

@@ -17,6 +17,8 @@ export const useLocalUserSettings = ({
     if (devices.input || devices.output) {
       const storedAudioInput = readFromStorage("audioinput");
       const storedAudioOutput = readFromStorage("audiooutput");
+      const storedBackendUrl = readFromStorage("backendUrl");
+      const storedBackendApiKey = readFromStorage("backendApiKey");
 
       const foundInputDevice =
         devices.input?.find((device) => device.deviceId === storedAudioInput)
@@ -35,6 +37,8 @@ export const useLocalUserSettings = ({
         username: readFromStorage("username") || "",
         audioinput: foundInputDevice,
         audiooutput: foundOutputDevice,
+        backendUrl: storedBackendUrl || undefined,
+        backendApiKey: storedBackendApiKey || undefined,
       };
 
       dispatch({

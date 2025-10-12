@@ -26,7 +26,7 @@ export const FlexContainer = styled.div`
 export const DisplayContainer = styled.div`
   display: flex;
   padding: 2rem;
-  max-width: 45rem;
+  max-width: min(45rem, 100%);
 `;
 
 export const ResponsiveFormContainer = styled(FormContainer)`

@@ -1,35 +1,46 @@
-const isSuccessful = (r: Response) => r.status >= 200 && r.status <= 399;
+import type { ResponseLike } from "../http";
+
+const isSuccessful = (r: { status: number }) => r.status >= 200 && r.status <= 399;
 
 export const handleFetchRequest = async <T>(
-  fetchRequest: Promise<Response>
+  fetchRequest: Promise<Response | ResponseLike>
 ): Promise<T> => {
-  const response = await fetchRequest;
-  let json = null;
-  let text = null;
+  const response = (await fetchRequest) as Response | ResponseLike;
+  let json: any = null;
+  let text: string | null = null;
 
-  const contentType = response.headers.get("content-type");
+  const contentType = response.headers?.get?.("content-type");
 
   if (contentType && contentType.indexOf("text/plain") > -1) {
     text = await response.text();
   } else if (contentType && contentType.indexOf("application/json") > -1) {
-    json = await response.json();
+    json = await (response as any).json();
+  } else {
+    // Fallback: try json first, then text
+    try {
+      json = await (response as any).json();
+    } catch (_) {
+      try {
+        text = await (response as any).text();
+      } catch (_) {
+        // ignore
+      }
+    }
   }
 
-  const isSuccess = isSuccessful(response);
+  const ok = isSuccessful(response as any);
 
-  if (!isSuccess) {
+  if (!ok) {
     if (text) {
       throw new Error(text);
     }
 
-    if (json && "message" in json) {
-      throw new Error(json.message);
+    if (json && typeof json === "object" && "message" in json) {
+      throw new Error((json as any).message as string);
     }
 
-    throw new Error(
-      `Response Code: ${response.status} - ${response.statusText}.`
-    );
+    throw new Error(`Response Code: ${(response as any).status}`);
   }
 
-  return text || json;
+  return (text as any) || (json as T);
 };

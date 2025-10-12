@@ -8,7 +8,7 @@ import { PageHeader } from "../page-layout/page-header";
 export const ManageProductionsPage = ({
   setApiError,
 }: {
-  setApiError: () => void;
+  setApiError: (value: boolean) => void;
 }) => {
   const [{ apiError, reloadProductionList }] = useGlobalState();
   const { productions, doInitialLoad, error, setIntervalLoad } =
@@ -23,9 +23,7 @@ export const ManageProductionsPage = ({
   });
 
   useEffect(() => {
-    if (apiError) {
-      setApiError();
-    }
+    setApiError(!!apiError);
   }, [apiError, setApiError]);
 
   useEffect(() => {

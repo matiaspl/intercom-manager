@@ -19,6 +19,8 @@ import {
   FetchErrorMessage,
 } from "../landing-page/join-production-components";
 import { TJoinProductionOptions, TProduction } from "../production-line/types";
+import { isMobileApp } from "../../platform";
+import { AudioRoute, AudioRouteId, GetRoutesResult } from "../../mobile-overlay/audio-route";
 import { ReloadDevicesButton } from "../reload-devices-button.tsx/reload-devices-button";
 import { TUserSettings } from "../user-settings/types";
 import { ConfirmationModal } from "../verify-decision/confirmation-modal";
@@ -78,6 +80,7 @@ export const UserSettingsForm = ({
     useState<boolean>(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState<boolean>(false);
   const [selectedLineName, setSelectedLineName] = useState<string>("");
+  const [routes, setRoutes] = useState<GetRoutesResult | null>(null);
   const {
     formState: { errors, isValid },
     register,
@@ -117,7 +120,34 @@ export const UserSettingsForm = ({
   });
 
   const isSettingsConfig = !isJoinProduction;
+  const isMobile = isMobileApp();
   const isSupportedBrowser = isBrowserFirefox && isJoinProduction;
+
+  useEffect(() => {
+    if (!isMobile) return;
+    let sub: { remove: () => void } | null = null;
+    AudioRoute.getAvailableRoutes()
+      .then((r) => setRoutes(r))
+      .catch(() => setRoutes(null));
+    try {
+      AudioRoute.addListener("audioRouteChanged", (state) => setRoutes(state)).then(
+        (h) => (sub = h)
+      );
+    } catch (_) {}
+    return () => {
+      if (sub && typeof sub.remove === "function") sub.remove();
+    };
+  }, [isMobile]);
+
+  const handleSelectRoute = async (route: AudioRouteId) => {
+    try {
+      await AudioRoute.setRoute({ route });
+      const r = await AudioRoute.getAvailableRoutes();
+      setRoutes(r);
+    } catch (_) {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     if (production && isJoinProduction) {
@@ -191,7 +221,43 @@ export const UserSettingsForm = ({
   });
 
   return (
-    <div style={{ minWidth: updateUserSettings ? "40rem" : "" }}>
+    <div style={{ minWidth: updateUserSettings ? "min(40rem, 100%)" : "" }}>
+      {isSettingsConfig && isMobile && (
+        <FormItem label="Backend URL" fieldName="backendUrl" errors={errors}>
+          <FormInput
+            // eslint-disable-next-line
+            {...register(`backendUrl` as any, {
+              validate: (v) => {
+                if (!v) return true;
+                try {
+                  // eslint-disable-next-line no-new
+                  // Normalize accidental quotes before validating
+                  const s = String(v).trim().replace(/^['\"]+|['\"]+$/g, "");
+                  new URL(s);
+                  return true;
+                } catch (_) {
+                  return "Enter a valid URL (e.g., https://host/)";
+                }
+              },
+            })}
+            placeholder="https://your-intercom-manager/"
+          />
+        </FormItem>
+      )}
+      {isSettingsConfig && isMobile && (
+        <FormItem
+          label="Backend API Key"
+          fieldName="backendApiKey"
+          errors={errors}
+        >
+          <FormInput
+            // eslint-disable-next-line
+            {...register(`backendApiKey` as any)}
+            type="password"
+            placeholder="Optional service access token"
+          />
+        </FormItem>
+      )}
       {!preSelected && isJoinProduction && (
         <FormItem label="Production Name" errors={errors}>
           <FormSelect
@@ -251,6 +317,26 @@ export const UserSettingsForm = ({
               Please enter a production id
             </StyledWarningMessage>
           )}
+        </FormItem>
+      )}
+      {isSettingsConfig && isMobile && routes && (
+        <FormItem label="Audio Output">
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {routes.routes.filter((r) => r.available).map((r) => (
+              <label key={r.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <input
+                  type="radio"
+                  name="mobile-audio-route"
+                  checked={routes.active === r.id}
+                  onChange={() => handleSelectRoute(r.id)}
+                />
+                {r.label}
+              </label>
+            ))}
+            <div style={{ opacity: 0.85, fontSize: "1.4rem" }}>
+              Current: {routes.active ?? "n/a"}
+            </div>
+          </div>
         </FormItem>
       )}
       <FormItem label="Username" fieldName="username" errors={errors}>

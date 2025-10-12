@@ -6,14 +6,16 @@ import { UserSettingsButton } from "./user-settings-button.tsx";
 import { TUserSettings } from "../user-settings/types.ts";
 import { isMobile } from "../../bowser.ts";
 
-export const LandingPage = ({ setApiError }: { setApiError: () => void }) => {
+export const LandingPage = ({
+  setApiError,
+}: {
+  setApiError: (value: boolean) => void;
+}) => {
   const [{ apiError, userSettings }] = useGlobalState();
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
   useEffect(() => {
-    if (apiError) {
-      setApiError();
-    }
+    setApiError(!!apiError);
   }, [apiError, setApiError]);
 
   const isUserSettingsComplete = (settings: TUserSettings | null) => {
