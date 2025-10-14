@@ -20,7 +20,11 @@ import {
 } from "../landing-page/join-production-components";
 import { TJoinProductionOptions, TProduction } from "../production-line/types";
 import { isMobileApp } from "../../platform";
+import { Capacitor } from "@capacitor/core";
 import { AudioRoute, AudioRouteId, GetRoutesResult } from "../../mobile-overlay/audio-route";
+import { OverlayBubble } from "../../mobile-overlay/bubble";
+import { DebugPanel } from "../mobile/DebugPanel";
+import { AppControl } from "../../mobile-overlay/app-control";
 import { ReloadDevicesButton } from "../reload-devices-button.tsx/reload-devices-button";
 import { TUserSettings } from "../user-settings/types";
 import { ConfirmationModal } from "../verify-decision/confirmation-modal";
@@ -81,6 +85,9 @@ export const UserSettingsForm = ({
   const [confirmModalOpen, setConfirmModalOpen] = useState<boolean>(false);
   const [selectedLineName, setSelectedLineName] = useState<string>("");
   const [routes, setRoutes] = useState<GetRoutesResult | null>(null);
+  const [overlayGranted, setOverlayGranted] = useState<boolean | null>(null);
+  const [overlayRunning, setOverlayRunning] = useState<boolean | null>(null);
+  const [showDebug, setShowDebug] = useState<boolean>(false);
   const {
     formState: { errors, isValid },
     register,
@@ -139,11 +146,29 @@ export const UserSettingsForm = ({
     };
   }, [isMobile]);
 
+  useEffect(() => {
+    // Check overlay permission state for diagnostics UI
+    if (!isMobile) return;
+    (async () => {
+      try {
+        const r = await OverlayBubble.canDrawOverlays();
+        setOverlayGranted(!!r?.granted);
+        try {
+          const s = await OverlayBubble.isRunning();
+          setOverlayRunning(!!s?.running);
+        } catch (_) {}
+      } catch (_) {
+        setOverlayGranted(null);
+      }
+    })();
+  }, [isMobile]);
+
   const handleSelectRoute = async (route: AudioRouteId) => {
     try {
       await AudioRoute.setRoute({ route });
       const r = await AudioRoute.getAvailableRoutes();
       setRoutes(r);
+      try { window.localStorage.setItem("mobileAudioRoute", route); } catch (_) {}
     } catch (_) {
       // ignore
     }
@@ -258,6 +283,91 @@ export const UserSettingsForm = ({
           />
         </FormItem>
       )}
+      {isSettingsConfig && isMobile && (
+        <FormItem label="Floating Controls">
+          <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try {
+                  const granted = await OverlayBubble.canDrawOverlays();
+                  if (!granted.granted) {
+                    await OverlayBubble.openOverlayPermission();
+                  }
+                  // Bubble will auto-show only when app is minimized and a call is active
+                  try {
+                    const r = await OverlayBubble.canDrawOverlays();
+                    setOverlayGranted(!!r?.granted);
+                    const s = await OverlayBubble.isRunning();
+                    setOverlayRunning(!!s?.running);
+                  } catch (_) {}
+                } catch (_) {}
+              }}
+            >
+              Enable Bubble
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try { await OverlayBubble.hide(); } catch (_) {}
+                try { const s = await OverlayBubble.isRunning(); setOverlayRunning(!!s?.running); } catch (_) {}
+              }}
+            >
+              Disable Bubble
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try { await OverlayBubble.openOverlayPermission(); } catch (_) {}
+              }}
+            >
+              Open Permission Settings
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try { await OverlayBubble.requestNotificationPermission(); } catch (_) {}
+              }}
+            >
+              Grant Notification Permission
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={() => setShowDebug((v) => !v)}
+            >
+              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try { await AppControl.stopServices(); } catch (_) {}
+              }}
+            >
+              Stop Services
+            </PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                try { await AppControl.exitApp(); } catch (_) {}
+              }}
+            >
+              Exit App
+            </PrimaryButton>
+            <div style={{ alignSelf: "center", opacity: 0.85 }}>
+              Plugin: {Capacitor.isPluginAvailable("OverlayBubble") ? "available" : "unavailable"}
+              {" \u2022 "}
+              Overlay permission: {overlayGranted === null ? "unknown" : overlayGranted ? "granted" : "denied"}
+              {" \u2022 "}
+              Service: {overlayRunning === null ? "unknown" : overlayRunning ? "running" : "stopped"}
+            </div>
+            {showDebug && (
+              <div style={{ width: "100%", marginTop: 8 }}>
+                <DebugPanel />
+              </div>
+            )}
+          </div>
+        </FormItem>
+      )}
       {!preSelected && isJoinProduction && (
         <FormItem label="Production Name" errors={errors}>
           <FormSelect
@@ -357,7 +467,7 @@ export const UserSettingsForm = ({
             </SectionTitle>
             {isBrowserFirefox && <FirefoxWarning type="firefox-warning" />}
           </DevicesSection>
-          <FormItem label="Input">
+          <FormItem label="Audio device">
             <FormSelect
               // eslint-disable-next-line
               {...register(`audioinput`)}
@@ -373,7 +483,7 @@ export const UserSettingsForm = ({
               )}
             </FormSelect>
           </FormItem>
-          {!isBrowserSafari && (
+          {!isBrowserSafari && !isMobile && (
             <FormItem label="Output">
               {devices.output && devices.output.length > 0 ? (
                 <FormSelect

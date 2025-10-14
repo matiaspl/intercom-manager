@@ -35,26 +35,41 @@ export const useInitiateProductionCall = ({
         // Wait for devices to refresh and get the updated devices
         const updatedDevices = await getUpdatedDevices();
 
-        const inputDeviceExists = updatedDevices.input.some(
-          (device) =>
-            device.deviceId === payload.joinProductionOptions.audioinput
-        );
+        // Validate and auto-fallback for missing devices
+        const requestedInput = payload.joinProductionOptions.audioinput;
+        const inputDeviceExists =
+          requestedInput === "no-device" ||
+          updatedDevices.input.some((d) => d.deviceId === requestedInput);
 
+        let selectedInput = requestedInput;
+        if (!inputDeviceExists) {
+          selectedInput =
+            updatedDevices.input[0]?.deviceId !== undefined
+              ? updatedDevices.input[0].deviceId
+              : "no-device";
+        }
+        payload.joinProductionOptions.audioinput = selectedInput;
+
+        const requestedOutput = payload.audiooutput;
         const outputDeviceExists = updatedDevices.output.some(
-          (device) => device.deviceId === payload.audiooutput
+          (device) => device.deviceId === requestedOutput
         );
 
-        if (
-          !inputDeviceExists ||
-          (!outputDeviceExists && !isBrowserSafari && !isMobile && !isIpad)
-        ) {
-          dispatch({
-            type: "ERROR",
-            payload: {
-              error: new Error("Selected devices are not available"),
-            },
-          });
-          return false;
+        if (!isBrowserSafari && !isMobile && !isIpad) {
+          if (!outputDeviceExists && updatedDevices.output.length > 0) {
+            payload.audiooutput = updatedDevices.output[0].deviceId;
+          }
+          if (
+            updatedDevices.output.length === 0 &&
+            requestedOutput &&
+            !outputDeviceExists
+          ) {
+            // Clear invalid desktop output if none available
+            payload.audiooutput = undefined;
+          }
+        } else {
+          // Mobile/Safari: ignore output selection
+          payload.audiooutput = undefined;
         }
 
         const uuid = globalThis.crypto.randomUUID();

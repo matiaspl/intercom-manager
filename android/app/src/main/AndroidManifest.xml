@@ -34,6 +34,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <service
+            android:name="com.eyevinn.intercom.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection" />
+        <service
+            android:name="com.eyevinn.intercom.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection" />
     </application>
 
     <!-- Permissions -->
@@ -45,4 +53,7 @@
     <!-- Optional for headset/Bluetooth support on newer Android versions -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

@@ -49,14 +49,22 @@ export const useAudioInput: TUseAudioInput = ({ audioInputId, dispatch }) => {
 
           setAudioInput(stream);
         })
-        .catch(() => {
-          setAudioInputError(true);
-          dispatch({
-            type: "ERROR",
-            payload: {
-              error: new Error("Selected devices are not available"),
-            },
-          });
+        .catch(async () => {
+          // Fallback to generic input if the exact device is not available
+          try {
+            const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (aborted) return;
+            fallback.getTracks().forEach((t) => { t.enabled = false; });
+            setAudioInput(fallback);
+          } catch (_) {
+            setAudioInputError(true);
+            dispatch({
+              type: "ERROR",
+              payload: {
+                error: new Error("Selected devices are not available"),
+              },
+            });
+          }
         });
     });
 
