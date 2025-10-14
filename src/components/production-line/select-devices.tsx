@@ -123,7 +123,7 @@ export const SelectDevices = ({
           ? joinProductionOptions.isProgramUser
           : !joinProductionOptions.isProgramUser) && (
           <FormLabel>
-            <DecorativeLabel>Input</DecorativeLabel>
+            <DecorativeLabel>Audio device</DecorativeLabel>
             <FormSelect
               // eslint-disable-next-line
               {...register(`audioinput`)}
@@ -141,7 +141,7 @@ export const SelectDevices = ({
             </FormSelect>
           </FormLabel>
         )}
-      {!isBrowserSafari &&
+      {!isBrowserSafari && !isMobile &&
         !(line?.programOutputLine && joinProductionOptions.isProgramUser) && (
           <FormLabel>
             <DecorativeLabel>Output</DecorativeLabel>

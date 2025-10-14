@@ -25,6 +25,10 @@ import { useSetupTokenRefresh } from "./hooks/use-reauth.tsx";
 import { isMobileApp } from "./platform";
 import { BackendStatus } from "./components/backend-status/backend-status";
 import { TUserSettings } from "./components/user-settings/types";
+import { BubbleActionHandler } from "./components/mobile/BubbleActionHandler";
+import { MobileInit } from "./components/mobile/MobileInit";
+import { CallServiceManager } from "./components/mobile/CallServiceManager";
+import { useInitiateProductionCall } from "./hooks/use-initiate-production-call";
 
 const DisplayBoxPositioningContainer = styled(FlexContainer)`
   justify-content: center;
@@ -92,6 +96,9 @@ const AppContent = ({
           <BackendStatus />
         </StatusBar>
       )}
+      {isMobileApp() && <BubbleActionHandler />}
+      {isMobileApp() && <MobileInit />}
+      {isMobileApp() && <CallServiceManager />}
       <ErrorBanner />
 
       {!isValidBrowser && !continueToApp && (
@@ -179,8 +186,9 @@ const App = () => {
   const continueToApp = isValidBrowser || isMobileApp() || unsupportedContinue;
   const { denied, permission } = useDevicePermissions({ continueToApp });
   const initializedGlobalState = useInitializeGlobalStateReducer();
-  const [{ devices, userSettings }, dispatch] = initializedGlobalState;
+  const [{ devices, userSettings, calls }, dispatch] = initializedGlobalState;
   const [apiError, setApiError] = useState(false);
+  const { initiateProductionCall } = useInitiateProductionCall({ dispatch });
 
   useFetchDevices({
     dispatch,
@@ -188,6 +196,41 @@ const App = () => {
   });
 
   useLocalUserSettings({ devices, dispatch });
+
+  // Persist call list to localStorage whenever calls change
+  useEffect(() => {
+    try {
+      const callEntries = Object.values(calls || {}).map((c: any) => ({
+        joinProductionOptions: c?.joinProductionOptions,
+        audiooutput: c?.audiooutput,
+      }));
+      window.localStorage.setItem("savedCalls", JSON.stringify(callEntries));
+    } catch (_) {}
+  }, [calls]);
+
+  // Restore saved calls on load once user settings and permission are ready
+  useEffect(() => {
+    const alreadyRestored = window.sessionStorage.getItem("callsRestored") === "1";
+    if (alreadyRestored) return;
+    if (!permission || !userSettings) return;
+    const currentCount = Object.keys(calls || {}).length;
+    if (currentCount > 0) return;
+    try {
+      const saved = window.localStorage.getItem("savedCalls");
+      if (!saved) return;
+      const list: Array<{ joinProductionOptions: any; audiooutput?: string }> = JSON.parse(saved);
+      if (!Array.isArray(list) || list.length === 0) return;
+      // Fire sequentially to avoid bursts
+      (async () => {
+        for (const item of list) {
+          try {
+            await initiateProductionCall({ payload: { joinProductionOptions: item.joinProductionOptions, audiooutput: item.audiooutput } });
+          } catch (_) {}
+        }
+        window.sessionStorage.setItem("callsRestored", "1");
+      })();
+    } catch (_) {}
+  }, [permission, userSettings, calls, initiateProductionCall]);
 
   return (
     <GlobalStateContext.Provider value={initializedGlobalState}>
