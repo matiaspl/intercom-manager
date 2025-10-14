@@ -44,7 +44,11 @@ import { useMasterInputMute } from "./use-master-input-mute.ts";
 import { useMuteInput } from "./use-mute-input.tsx";
 import { useUpdateCallDevice } from "./use-update-call-device.tsx";
 import { useVolumeReducer } from "./use-volume-reducer.tsx";
-import { setCallActionHandler, clearCallHandlers, setCallStateGetter } from "../../mobile-overlay/action-handlers";
+import {
+  setCallActionHandler,
+  clearCallHandlers,
+  setCallStateGetter,
+} from "../../mobile-overlay/action-handlers";
 import { UserControls } from "./user-controls.tsx";
 import { UserList } from "./user-list.tsx";
 
@@ -366,7 +370,9 @@ export const ProductionLine = ({
   // Keep bubble in sync with current UI state and cleanup on unmount
   useEffect(() => {
     setCallStateGetter(id, () => ({ isInputMuted, isOutputMuted }));
-    return () => { clearCallHandlers(id); };
+    return () => {
+      clearCallHandlers(id);
+    };
   }, [id, isInputMuted, isOutputMuted]);
 
   useSpeakerHotkeys({

@@ -8,4 +8,3 @@ export interface CallServicePlugin {
 }
 
 export const CallService = registerPlugin<CallServicePlugin>("CallService");
-

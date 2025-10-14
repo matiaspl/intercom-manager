@@ -26,10 +26,10 @@ const Dot = styled.span<{ status: Status }>`
     status === "online"
       ? "#36c28a"
       : status === "unauthorized"
-      ? "#ffcc00"
-      : status === "offline"
-      ? "#f04438"
-      : "#9aa3ab"};
+        ? "#ffcc00"
+        : status === "offline"
+          ? "#f04438"
+          : "#9aa3ab"};
 `;
 
 const Label = styled.span`
@@ -104,7 +104,10 @@ export const BackendStatus = () => {
     return () => {
       cancelled = true;
       clearInterval(id);
-      window.removeEventListener("backend:response", onResponse as EventListener);
+      window.removeEventListener(
+        "backend:response",
+        onResponse as EventListener
+      );
       window.removeEventListener("backend:error", onError as EventListener);
     };
   }, [mobile, status]);
@@ -121,10 +124,10 @@ export const BackendStatus = () => {
         {status === "online"
           ? "Online"
           : status === "unauthorized"
-          ? "Unauthorized"
-          : status === "offline"
-          ? "Offline"
-          : "Unknown"}
+            ? "Unauthorized"
+            : status === "offline"
+              ? "Offline"
+              : "Unknown"}
       </Value>
     </Wrapper>
   );

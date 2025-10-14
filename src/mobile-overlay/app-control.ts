@@ -6,4 +6,3 @@ export interface AppControlPlugin {
 }
 
 export const AppControl = registerPlugin<AppControlPlugin>("AppControl");
-

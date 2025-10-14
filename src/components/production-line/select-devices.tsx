@@ -141,7 +141,8 @@ export const SelectDevices = ({
             </FormSelect>
           </FormLabel>
         )}
-      {!isBrowserSafari && !isMobile &&
+      {!isBrowserSafari &&
+        !isMobile &&
         !(line?.programOutputLine && joinProductionOptions.isProgramUser) && (
           <FormLabel>
             <DecorativeLabel>Output</DecorativeLabel>

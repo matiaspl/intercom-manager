@@ -14,13 +14,14 @@ export const BubbleActionHandler = () => {
       const action = e?.action;
       if (action === "hangup") {
         const ids = Object.keys(state.calls || {});
-        ids.forEach((id) =>
-          dispatch({ type: "REMOVE_CALL", payload: { id } })
-        );
+        ids.forEach((id) => dispatch({ type: "REMOVE_CALL", payload: { id } }));
       } else if (action === "speaker") {
         try {
           const routes = await AudioRoute.getAvailableRoutes();
-          if (routes?.active === "speaker" && routes.routes.find((r) => r.id === "earpiece" && r.available)) {
+          if (
+            routes?.active === "speaker" &&
+            routes.routes.find((r) => r.id === "earpiece" && r.available)
+          ) {
             await AudioRoute.setRoute({ route: "earpiece" });
           } else {
             await AudioRoute.setRoute({ route: "speaker" });
@@ -64,4 +65,3 @@ export const BubbleActionHandler = () => {
 
   return null;
 };
-

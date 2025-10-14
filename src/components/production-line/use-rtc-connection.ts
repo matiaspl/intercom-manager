@@ -396,7 +396,6 @@ export const useRtcConnection = ({
 
       rtcPeerConnection.close();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     sdpOffer,
     inputAudioStream,

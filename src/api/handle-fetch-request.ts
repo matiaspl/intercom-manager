@@ -1,6 +1,7 @@
 import type { ResponseLike } from "../http";
 
-const isSuccessful = (r: { status: number }) => r.status >= 200 && r.status <= 399;
+const isSuccessful = (r: { status: number }) =>
+  r.status >= 200 && r.status <= 399;
 
 export const handleFetchRequest = async <T>(
   fetchRequest: Promise<Response | ResponseLike>
@@ -19,10 +20,10 @@ export const handleFetchRequest = async <T>(
     // Fallback: try json first, then text
     try {
       json = await (response as any).json();
-    } catch (_) {
+    } catch {
       try {
         text = await (response as any).text();
-      } catch (_) {
+      } catch {
         // ignore
       }
     }

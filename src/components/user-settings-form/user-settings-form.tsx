@@ -1,6 +1,8 @@
+/* eslint-disable no-useless-escape */
 import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { Capacitor } from "@capacitor/core";
 import { isBrowserFirefox, isBrowserSafari } from "../../bowser";
 import { useGlobalState } from "../../global-state/context-provider";
 import { useSubmitOnEnter } from "../../hooks/use-submit-form-enter-press";
@@ -20,8 +22,11 @@ import {
 } from "../landing-page/join-production-components";
 import { TJoinProductionOptions, TProduction } from "../production-line/types";
 import { isMobileApp } from "../../platform";
-import { Capacitor } from "@capacitor/core";
-import { AudioRoute, AudioRouteId, GetRoutesResult } from "../../mobile-overlay/audio-route";
+import {
+  AudioRoute,
+  AudioRouteId,
+  GetRoutesResult,
+} from "../../mobile-overlay/audio-route";
 import { OverlayBubble } from "../../mobile-overlay/bubble";
 import { DebugPanel } from "../mobile/DebugPanel";
 import { AppControl } from "../../mobile-overlay/app-control";
@@ -137,9 +142,11 @@ export const UserSettingsForm = ({
       .then((r) => setRoutes(r))
       .catch(() => setRoutes(null));
     try {
-      AudioRoute.addListener("audioRouteChanged", (state) => setRoutes(state)).then(
-        (h) => (sub = h)
-      );
+      AudioRoute.addListener("audioRouteChanged", (state) =>
+        setRoutes(state)
+      ).then((h) => {
+        sub = h;
+      });
     } catch (_) {}
     return () => {
       if (sub && typeof sub.remove === "function") sub.remove();
@@ -168,7 +175,9 @@ export const UserSettingsForm = ({
       await AudioRoute.setRoute({ route });
       const r = await AudioRoute.getAvailableRoutes();
       setRoutes(r);
-      try { window.localStorage.setItem("mobileAudioRoute", route); } catch (_) {}
+      try {
+        window.localStorage.setItem("mobileAudioRoute", route);
+      } catch (_) {}
     } catch (_) {
       // ignore
     }
@@ -255,10 +264,12 @@ export const UserSettingsForm = ({
               validate: (v) => {
                 if (!v) return true;
                 try {
-                  // eslint-disable-next-line no-new
                   // Normalize accidental quotes before validating
-                  const s = String(v).trim().replace(/^['\"]+|['\"]+$/g, "");
-                  new URL(s);
+                  const s = String(v)
+                    .trim()
+                    .replace(/^['\"]+|['\"]+$/g, "");
+                  const parsed = new URL(s);
+                  void parsed.href;
                   return true;
                 } catch (_) {
                   return "Enter a valid URL (e.g., https://host/)";
@@ -309,8 +320,13 @@ export const UserSettingsForm = ({
             <PrimaryButton
               type="button"
               onClick={async () => {
-                try { await OverlayBubble.hide(); } catch (_) {}
-                try { const s = await OverlayBubble.isRunning(); setOverlayRunning(!!s?.running); } catch (_) {}
+                try {
+                  await OverlayBubble.hide();
+                } catch (_) {}
+                try {
+                  const s = await OverlayBubble.isRunning();
+                  setOverlayRunning(!!s?.running);
+                } catch (_) {}
               }}
             >
               Disable Bubble
@@ -318,7 +334,9 @@ export const UserSettingsForm = ({
             <PrimaryButton
               type="button"
               onClick={async () => {
-                try { await OverlayBubble.openOverlayPermission(); } catch (_) {}
+                try {
+                  await OverlayBubble.openOverlayPermission();
+                } catch (_) {}
               }}
             >
               Open Permission Settings
@@ -326,7 +344,9 @@ export const UserSettingsForm = ({
             <PrimaryButton
               type="button"
               onClick={async () => {
-                try { await OverlayBubble.requestNotificationPermission(); } catch (_) {}
+                try {
+                  await OverlayBubble.requestNotificationPermission();
+                } catch (_) {}
               }}
             >
               Grant Notification Permission
@@ -340,7 +360,9 @@ export const UserSettingsForm = ({
             <PrimaryButton
               type="button"
               onClick={async () => {
-                try { await AppControl.stopServices(); } catch (_) {}
+                try {
+                  await AppControl.stopServices();
+                } catch (_) {}
               }}
             >
               Stop Services
@@ -348,17 +370,32 @@ export const UserSettingsForm = ({
             <PrimaryButton
               type="button"
               onClick={async () => {
-                try { await AppControl.exitApp(); } catch (_) {}
+                try {
+                  await AppControl.exitApp();
+                } catch (_) {}
               }}
             >
               Exit App
             </PrimaryButton>
             <div style={{ alignSelf: "center", opacity: 0.85 }}>
-              Plugin: {Capacitor.isPluginAvailable("OverlayBubble") ? "available" : "unavailable"}
+              Plugin:{" "}
+              {Capacitor.isPluginAvailable("OverlayBubble")
+                ? "available"
+                : "unavailable"}
               {" \u2022 "}
-              Overlay permission: {overlayGranted === null ? "unknown" : overlayGranted ? "granted" : "denied"}
+              Overlay permission:{" "}
+              {overlayGranted === null
+                ? "unknown"
+                : overlayGranted
+                  ? "granted"
+                  : "denied"}
               {" \u2022 "}
-              Service: {overlayRunning === null ? "unknown" : overlayRunning ? "running" : "stopped"}
+              Service:{" "}
+              {overlayRunning === null
+                ? "unknown"
+                : overlayRunning
+                  ? "running"
+                  : "stopped"}
             </div>
             {showDebug && (
               <div style={{ width: "100%", marginTop: 8 }}>
@@ -431,18 +468,31 @@ export const UserSettingsForm = ({
       )}
       {isSettingsConfig && isMobile && routes && (
         <FormItem label="Audio Output">
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {routes.routes.filter((r) => r.available).map((r) => (
-              <label key={r.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <input
-                  type="radio"
-                  name="mobile-audio-route"
-                  checked={routes.active === r.id}
-                  onChange={() => handleSelectRoute(r.id)}
-                />
-                {r.label}
-              </label>
-            ))}
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
+          >
+            {routes.routes
+              .filter((r) => r.available)
+              .map((r) => (
+                <label
+                  key={r.id}
+                  htmlFor={`mobile-audio-route-${r.id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="mobile-audio-route"
+                    id={`mobile-audio-route-${r.id}`}
+                    checked={routes.active === r.id}
+                    onChange={() => handleSelectRoute(r.id)}
+                  />
+                  {r.label}
+                </label>
+              ))}
             <div style={{ opacity: 0.85, fontSize: "1.4rem" }}>
               Current: {routes.active ?? "n/a"}
             </div>

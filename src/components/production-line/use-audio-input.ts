@@ -52,9 +52,14 @@ export const useAudioInput: TUseAudioInput = ({ audioInputId, dispatch }) => {
         .catch(async () => {
           // Fallback to generic input if the exact device is not available
           try {
-            const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const fallback = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
             if (aborted) return;
-            fallback.getTracks().forEach((t) => { t.enabled = false; });
+            fallback.getTracks().forEach((t) => {
+              // eslint-disable-next-line no-param-reassign
+              t.enabled = false;
+            });
             setAudioInput(fallback);
           } catch (_) {
             setAudioInputError(true);

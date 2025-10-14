@@ -1,13 +1,12 @@
-import { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.eyevinn.intercom',
-  appName: 'Intercom',
-  webDir: 'dist',
+  appId: "com.eyevinn.intercom",
+  appName: "Intercom",
+  webDir: "dist",
   server: {
-    androidScheme: 'https'
-  }
+    androidScheme: "https",
+  },
 };
 
 export default config;
-

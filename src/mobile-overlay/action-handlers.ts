@@ -2,7 +2,10 @@ export type ActionHandler = () => void;
 
 // Global registry for call-specific UI action handlers and state getters
 const actionRegistry: Record<string, Record<string, ActionHandler>> = {};
-const stateGetters: Record<string, () => { isInputMuted: boolean; isOutputMuted: boolean }> = {};
+const stateGetters: Record<
+  string,
+  () => { isInputMuted: boolean; isOutputMuted: boolean }
+> = {};
 
 export const setCallActionHandler = (
   callId: string,
@@ -26,7 +29,8 @@ export const setCallStateGetter = (
 
 export const getCallState = (
   callId: string
-): { isInputMuted: boolean; isOutputMuted: boolean } | undefined => stateGetters[callId]?.();
+): { isInputMuted: boolean; isOutputMuted: boolean } | undefined =>
+  stateGetters[callId]?.();
 
 export const clearCallHandlers = (callId: string) => {
   delete actionRegistry[callId];

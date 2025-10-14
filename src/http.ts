@@ -1,5 +1,5 @@
-import { isMobileApp } from "./platform";
 import { CapacitorHttp } from "@capacitor/core";
+import { isMobileApp } from "./platform";
 
 export type ResponseLike = {
   status: number;
@@ -9,7 +9,9 @@ export type ResponseLike = {
   text: () => Promise<string>;
 };
 
-const toHeadersGet = (headers?: Record<string, string>): ((key: string) => string | null) => {
+const toHeadersGet = (
+  headers?: Record<string, string>
+): ((key: string) => string | null) => {
   const map = headers || {};
   return (key: string) => {
     const k = key.toLowerCase();
@@ -45,13 +47,15 @@ export const httpRequest = async (
           );
         }
       } catch (_) {}
-    
+
       return res;
     } catch (err) {
       try {
         if (typeof window !== "undefined") {
           window.dispatchEvent(
-            new CustomEvent("backend:error", { detail: { url, ts: Date.now() } })
+            new CustomEvent("backend:error", {
+              detail: { url, ts: Date.now() },
+            })
           );
         }
       } catch (_) {}
@@ -61,7 +65,7 @@ export const httpRequest = async (
 
   const method = (init?.method || "GET").toUpperCase();
   const headers = (init?.headers || {}) as Record<string, string>;
-  let data: unknown = undefined;
+  let data: unknown;
   if (init?.body) {
     try {
       data = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
@@ -80,7 +84,8 @@ export const httpRequest = async (
       statusText: String(res.status),
       headers: { get },
       json: async () => res.data,
-      text: async () => (typeof res.data === "string" ? res.data : JSON.stringify(res.data)),
+      text: async () =>
+        typeof res.data === "string" ? res.data : JSON.stringify(res.data),
     };
 
     try {

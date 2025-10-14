@@ -15,12 +15,10 @@ export const GenerateWhipUrlButton = ({
     if (isMinified) {
       if (isMobile) {
         return "Whip";
-      } else {
-        return "Whip URL";
       }
-    } else {
-      return "Get Whip URL";
+      return "Whip URL";
     }
+    return "Get Whip URL";
   };
 
   return (

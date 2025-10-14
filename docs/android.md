@@ -34,6 +34,7 @@ yarn build
 ```
 
 Notes:
+
 - For local development on an Android emulator, `localhost` inside the WebView is not your host machine. Use `http://10.0.2.2:<port>` to reach a service running on your host.
 - For a physical device, use your host’s LAN IP, and ensure both are on the same network.
 
@@ -86,13 +87,13 @@ android:usesCleartextTraffic="true"
 
 You can point the native app at the Vite dev server for faster iteration.
 
-1) Start Vite dev server:
+1. Start Vite dev server:
 
 ```
 yarn dev
 ```
 
-2) In `capacitor.config.ts`, set the server to your dev URL (emulator example):
+2. In `capacitor.config.ts`, set the server to your dev URL (emulator example):
 
 ```
 server: {
@@ -101,7 +102,7 @@ server: {
 }
 ```
 
-3) Run on device/emulator with live reload:
+3. Run on device/emulator with live reload:
 
 ```
 yarn cap:run:android
@@ -140,4 +141,5 @@ WebView remote debugging is enabled for debug builds. Steps:
 4. Your app’s WebView should appear under Remote Target. Click "inspect" to open DevTools.
 
 Note: WebView debugging is enabled via `WebView.setWebContentsDebuggingEnabled(true)` in `MainActivity` for debug builds only.
+
 - Security: the Backend API Key is stored locally on the device (app storage/localStorage). Treat it as sensitive and rotate if exposed.

@@ -41,36 +41,40 @@ export const useInitiateProductionCall = ({
           requestedInput === "no-device" ||
           updatedDevices.input.some((d) => d.deviceId === requestedInput);
 
-        let selectedInput = requestedInput;
-        if (!inputDeviceExists) {
-          selectedInput =
-            updatedDevices.input[0]?.deviceId !== undefined
-              ? updatedDevices.input[0].deviceId
-              : "no-device";
-        }
-        payload.joinProductionOptions.audioinput = selectedInput;
+        const selectedInput = inputDeviceExists
+          ? requestedInput
+          : updatedDevices.input[0]?.deviceId !== undefined
+            ? updatedDevices.input[0].deviceId
+            : "no-device";
+
+        const nextJoinOpts: TJoinProductionOptions = {
+          ...payload.joinProductionOptions,
+          audioinput: selectedInput,
+        };
 
         const requestedOutput = payload.audiooutput;
         const outputDeviceExists = updatedDevices.output.some(
           (device) => device.deviceId === requestedOutput
         );
 
-        if (!isBrowserSafari && !isMobile && !isIpad) {
-          if (!outputDeviceExists && updatedDevices.output.length > 0) {
-            payload.audiooutput = updatedDevices.output[0].deviceId;
+        const nextAudioOutput = (() => {
+          if (!isBrowserSafari && !isMobile && !isIpad) {
+            if (!outputDeviceExists && updatedDevices.output.length > 0) {
+              return updatedDevices.output[0].deviceId;
+            }
+            if (
+              updatedDevices.output.length === 0 &&
+              requestedOutput &&
+              !outputDeviceExists
+            ) {
+              // Clear invalid desktop output if none available
+              return undefined;
+            }
+            return requestedOutput;
           }
-          if (
-            updatedDevices.output.length === 0 &&
-            requestedOutput &&
-            !outputDeviceExists
-          ) {
-            // Clear invalid desktop output if none available
-            payload.audiooutput = undefined;
-          }
-        } else {
           // Mobile/Safari: ignore output selection
-          payload.audiooutput = undefined;
-        }
+          return undefined;
+        })();
 
         const uuid = globalThis.crypto.randomUUID();
 
@@ -79,8 +83,8 @@ export const useInitiateProductionCall = ({
           payload: {
             id: uuid,
             callState: {
-              joinProductionOptions: payload.joinProductionOptions,
-              audiooutput: payload.audiooutput,
+              joinProductionOptions: nextJoinOpts,
+              audiooutput: nextAudioOutput,
               mediaStreamInput: null,
               dominantSpeaker: null,
               audioLevelAboveThreshold: false,

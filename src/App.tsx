@@ -210,7 +210,8 @@ const App = () => {
 
   // Restore saved calls on load once user settings and permission are ready
   useEffect(() => {
-    const alreadyRestored = window.sessionStorage.getItem("callsRestored") === "1";
+    const alreadyRestored =
+      window.sessionStorage.getItem("callsRestored") === "1";
     if (alreadyRestored) return;
     if (!permission || !userSettings) return;
     const currentCount = Object.keys(calls || {}).length;
@@ -218,13 +219,19 @@ const App = () => {
     try {
       const saved = window.localStorage.getItem("savedCalls");
       if (!saved) return;
-      const list: Array<{ joinProductionOptions: any; audiooutput?: string }> = JSON.parse(saved);
+      const list: Array<{ joinProductionOptions: any; audiooutput?: string }> =
+        JSON.parse(saved);
       if (!Array.isArray(list) || list.length === 0) return;
       // Fire sequentially to avoid bursts
       (async () => {
         for (const item of list) {
           try {
-            await initiateProductionCall({ payload: { joinProductionOptions: item.joinProductionOptions, audiooutput: item.audiooutput } });
+            await initiateProductionCall({
+              payload: {
+                joinProductionOptions: item.joinProductionOptions,
+                audiooutput: item.audiooutput,
+              },
+            });
           } catch (_) {}
         }
         window.sessionStorage.setItem("callsRestored", "1");

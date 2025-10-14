@@ -80,42 +80,133 @@ export const DebugPanel = () => {
   }, [refresh]);
 
   return (
-    <div style={{
-      border: "1px solid #444",
-      borderRadius: 8,
-      padding: 12,
-      background: "#2a2f34",
-      fontSize: "1.4rem",
-      display: "grid",
-      gap: 8,
-    }}>
-      <div><strong>Platform:</strong> {status.platform}</div>
+    <div
+      style={{
+        border: "1px solid #444",
+        borderRadius: 8,
+        padding: 12,
+        background: "#2a2f34",
+        fontSize: "1.4rem",
+        display: "grid",
+        gap: 8,
+      }}
+    >
       <div>
-        <strong>Plugins:</strong> OverlayBubble={String(status.overlayPlugin)} • CallService={String(status.callServicePlugin)} • AudioRoute={String(status.audioRoutePlugin)}
+        <strong>Platform:</strong> {status.platform}
       </div>
       <div>
-        <strong>Overlay:</strong> permission={status.overlayGranted === null ? "unknown" : String(status.overlayGranted)} • service={status.overlayRunning === null ? "unknown" : String(status.overlayRunning)}
+        <strong>Plugins:</strong> OverlayBubble={String(status.overlayPlugin)} •
+        CallService={String(status.callServicePlugin)} • AudioRoute=
+        {String(status.audioRoutePlugin)}
       </div>
       <div>
-        <strong>CallService:</strong> running={status.callServiceRunning === null ? "unknown" : String(status.callServiceRunning)}
+        <strong>Overlay:</strong> permission=
+        {status.overlayGranted === null
+          ? "unknown"
+          : String(status.overlayGranted)}{" "}
+        • service=
+        {status.overlayRunning === null
+          ? "unknown"
+          : String(status.overlayRunning)}
       </div>
       <div>
-        <strong>AudioRoute:</strong> saved={status.savedRoute || "-"} • active={status.activeRoute || "-"}
+        <strong>CallService:</strong> running=
+        {status.callServiceRunning === null
+          ? "unknown"
+          : String(status.callServiceRunning)}
+      </div>
+      <div>
+        <strong>AudioRoute:</strong> saved={status.savedRoute || "-"} • active=
+        {status.activeRoute || "-"}
       </div>
       {status.error && (
-        <div style={{ color: "#f88" }}><strong>Error:</strong> {status.error}</div>
+        <div style={{ color: "#f88" }}>
+          <strong>Error:</strong> {status.error}
+        </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button disabled={busy} onClick={refresh}>Refresh</button>
-        <button disabled={busy || !status.overlayPlugin} onClick={async () => { try { await OverlayBubble.openOverlayPermission(); } catch (e) {} }}>Open Overlay Settings</button>
-        <button disabled={busy || !status.overlayPlugin} onClick={async () => { try { await OverlayBubble.show(); } catch (e) {} }}>Show Bubble</button>
-        <button disabled={busy || !status.overlayPlugin} onClick={async () => { try { await OverlayBubble.hide(); } catch (e) {} }}>Hide Bubble</button>
-        <button disabled={busy || !status.callServicePlugin} onClick={async () => { try { await CallService.requestNotificationPermission(); } catch (e) {} }}>Grant Notification</button>
-        <button disabled={busy || !status.callServicePlugin} onClick={async () => { try { await CallService.start(); } catch (e) {} }}>Start Call Service</button>
-        <button disabled={busy || !status.callServicePlugin} onClick={async () => { try { await CallService.stop(); } catch (e) {} }}>Stop Call Service</button>
-        <button disabled={busy || !status.audioRoutePlugin} onClick={async () => { try { const saved = window.localStorage.getItem("mobileAudioRoute"); if (saved) await AudioRoute.setRoute({ route: saved as any }); } catch (e) {} }}>Apply Saved Route</button>
+        <button type="button" disabled={busy} onClick={refresh}>
+          Refresh
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.overlayPlugin}
+          onClick={async () => {
+            try {
+              await OverlayBubble.openOverlayPermission();
+            } catch (e) {}
+          }}
+        >
+          Open Overlay Settings
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.overlayPlugin}
+          onClick={async () => {
+            try {
+              await OverlayBubble.show();
+            } catch (e) {}
+          }}
+        >
+          Show Bubble
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.overlayPlugin}
+          onClick={async () => {
+            try {
+              await OverlayBubble.hide();
+            } catch (e) {}
+          }}
+        >
+          Hide Bubble
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.callServicePlugin}
+          onClick={async () => {
+            try {
+              await CallService.requestNotificationPermission();
+            } catch (e) {}
+          }}
+        >
+          Grant Notification
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.callServicePlugin}
+          onClick={async () => {
+            try {
+              await CallService.start();
+            } catch (e) {}
+          }}
+        >
+          Start Call Service
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.callServicePlugin}
+          onClick={async () => {
+            try {
+              await CallService.stop();
+            } catch (e) {}
+          }}
+        >
+          Stop Call Service
+        </button>
+        <button
+          type="button"
+          disabled={busy || !status.audioRoutePlugin}
+          onClick={async () => {
+            try {
+              const saved = window.localStorage.getItem("mobileAudioRoute");
+              if (saved) await AudioRoute.setRoute({ route: saved as any });
+            } catch (e) {}
+          }}
+        >
+          Apply Saved Route
+        </button>
       </div>
     </div>
   );
 };
-

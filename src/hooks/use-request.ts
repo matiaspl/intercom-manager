@@ -85,7 +85,6 @@ export const useRequest = <T, R = void>({
         setLoading(false);
       });
 
-    // eslint-disable-next-line consistent-return
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();

@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useGlobalState } from "../../global-state/context-provider";
 import { OverlayBubble } from "../../mobile-overlay/bubble";
-import { Capacitor } from "@capacitor/core";
-import { getCallHandlers, getCallState } from "../../mobile-overlay/action-handlers";
+import {
+  getCallHandlers,
+  getCallState,
+} from "../../mobile-overlay/action-handlers";
 import { isMobileApp } from "../../platform";
 
 export const BubbleActionHandler = () => {
@@ -19,13 +22,15 @@ export const BubbleActionHandler = () => {
       const latch = ids.map((id) => {
         const s = getCallState(id);
         if (s) return !s.isInputMuted;
-        const ms: MediaStream | null = (calls as any)[id]?.mediaStreamInput || null;
+        const ms: MediaStream | null =
+          (calls as any)[id]?.mediaStreamInput || null;
         return !!(ms && ms.getAudioTracks().some((t) => t.enabled));
       });
       const listen = ids.map((id) => {
         const s = getCallState(id);
         if (s) return !s.isOutputMuted;
-        const els: HTMLAudioElement[] | null = (calls as any)[id]?.audioElements || null;
+        const els: HTMLAudioElement[] | null =
+          (calls as any)[id]?.audioElements || null;
         if (!els || els.length === 0) return true;
         return els.some((el) => !el.muted);
       });
@@ -35,7 +40,12 @@ export const BubbleActionHandler = () => {
         const isProgramUser = !!jp?.isProgramUser;
         return !(isPgm && !isProgramUser);
       });
-      await OverlayBubble.setCallRows({ count: ids.length, latch, listen, micAllowed });
+      await OverlayBubble.setCallRows({
+        count: ids.length,
+        latch,
+        listen,
+        micAllowed,
+      });
     } catch (_) {}
   };
 
@@ -51,7 +61,10 @@ export const BubbleActionHandler = () => {
       if (action === "listen") {
         const calls = state.calls || {};
         const ids = Object.keys(calls);
-        const targetId = typeof index === 'number' && index >= 0 && index < ids.length ? ids[index] : undefined;
+        const targetId =
+          typeof index === "number" && index >= 0 && index < ids.length
+            ? ids[index]
+            : undefined;
         if (targetId) {
           getCallHandlers(targetId)?.toggle_output_mute?.();
         } else {
@@ -64,7 +77,10 @@ export const BubbleActionHandler = () => {
       if (action === "talk_latch") {
         const calls = state.calls || {};
         const ids = Object.keys(calls);
-        const targetId = typeof index === 'number' && index >= 0 && index < ids.length ? ids[index] : undefined;
+        const targetId =
+          typeof index === "number" && index >= 0 && index < ids.length
+            ? ids[index]
+            : undefined;
         if (targetId) {
           getCallHandlers(targetId)?.toggle_input_mute?.();
         } else {
@@ -77,21 +93,27 @@ export const BubbleActionHandler = () => {
       if (action === "ptt_down" || action === "ptt_up") {
         const calls = state.calls || {};
         const ids = Object.keys(calls);
-        const targetId = typeof index === 'number' && index >= 0 && index < ids.length ? ids[index] : undefined;
-        const press = action === 'ptt_down';
+        const targetId =
+          typeof index === "number" && index >= 0 && index < ids.length
+            ? ids[index]
+            : undefined;
+        const press = action === "ptt_down";
         const invoke = (id: string) => {
           const h = getCallHandlers(id);
           if (!h) return;
-          if (press) h.push_to_talk_start?.(); else h.push_to_talk_stop?.();
+          if (press) h.push_to_talk_start?.();
+          else h.push_to_talk_stop?.();
         };
-        if (targetId) invoke(targetId); else ids.forEach(invoke);
+        if (targetId) invoke(targetId);
+        else ids.forEach(invoke);
         // Do NOT sync overlay state for PTT – local UI only (button background)
-        return;
       }
     });
 
     let sub: { remove: () => void } | null = null;
-    subPromise.then((h) => (sub = h));
+    subPromise.then((h) => {
+      sub = h;
+    });
     return () => {
       if (sub && typeof sub.remove === "function") sub.remove();
     };
@@ -113,11 +135,13 @@ export const BubbleActionHandler = () => {
               const calls = state.calls || {};
               const ids = Object.keys(calls);
               const latch = ids.map((id) => {
-                const ms: MediaStream | null = (calls as any)[id]?.mediaStreamInput || null;
+                const ms: MediaStream | null =
+                  (calls as any)[id]?.mediaStreamInput || null;
                 return !!(ms && ms.getAudioTracks().some((t) => t.enabled));
               });
               const listen = ids.map((id) => {
-                const els: HTMLAudioElement[] | null = (calls as any)[id]?.audioElements || null;
+                const els: HTMLAudioElement[] | null =
+                  (calls as any)[id]?.audioElements || null;
                 if (!els || els.length === 0) return true;
                 return els.some((el) => !el.muted);
               });
@@ -127,7 +151,12 @@ export const BubbleActionHandler = () => {
                 const isProgramUser = !!jp?.isProgramUser;
                 return !(isPgm && !isProgramUser);
               });
-              await OverlayBubble.setCallRows({ count: ids.length, latch, listen, micAllowed });
+              await OverlayBubble.setCallRows({
+                count: ids.length,
+                latch,
+                listen,
+                micAllowed,
+              });
             } catch (_) {}
           }
         } else {

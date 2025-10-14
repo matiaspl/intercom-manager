@@ -5,7 +5,12 @@ export interface OverlayBubblePlugin {
   openOverlayPermission(): Promise<void>;
   show(): Promise<void>;
   hide(): Promise<void>;
-  setCallRows(options: { count: number; latch: boolean[]; listen: boolean[]; micAllowed?: boolean[] }): Promise<void>;
+  setCallRows(options: {
+    count: number;
+    latch: boolean[];
+    listen: boolean[];
+    micAllowed?: boolean[];
+  }): Promise<void>;
   isRunning(): Promise<{ running: boolean }>;
   requestNotificationPermission(): Promise<void>;
   addListener(
@@ -14,6 +19,5 @@ export interface OverlayBubblePlugin {
   ): Promise<PluginListenerHandle> & PluginListenerHandle;
 }
 
-export const OverlayBubble = registerPlugin<OverlayBubblePlugin>(
-  "OverlayBubble"
-);
+export const OverlayBubble =
+  registerPlugin<OverlayBubblePlugin>("OverlayBubble");
