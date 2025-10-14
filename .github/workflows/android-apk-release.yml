@@ -40,12 +40,19 @@ jobs:
       - name: Sync Capacitor Android
         run: yarn android:build
 
-      - name: Assemble debug APK
+      - name: Assemble release APK
         run: |
           cd android
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Rename APK to open-intercom.apk
+        run: |
+          set -euo pipefail
+          APK=$(ls -1 android/app/build/outputs/apk/release/*.apk | head -n 1)
+          echo "Using APK: $APK"
+          cp "$APK" android/app/build/outputs/apk/release/open-intercom.apk
 
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/release/open-intercom.apk
