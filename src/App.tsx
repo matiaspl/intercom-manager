@@ -28,6 +28,7 @@ import { TUserSettings } from "./components/user-settings/types";
 import { BubbleActionHandler } from "./components/mobile/BubbleActionHandler";
 import { MobileInit } from "./components/mobile/MobileInit";
 import { CallServiceManager } from "./components/mobile/CallServiceManager";
+import { StartupPermissions } from "./components/mobile/StartupPermissions";
 import { useInitiateProductionCall } from "./hooks/use-initiate-production-call";
 
 const DisplayBoxPositioningContainer = styled(FlexContainer)`
@@ -91,6 +92,7 @@ const AppContent = ({
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Header />
+      {isMobileApp() && <StartupPermissions />}
       {isMobileApp() && (
         <StatusBar>
           <BackendStatus />
