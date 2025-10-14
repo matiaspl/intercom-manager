@@ -20,6 +20,8 @@ export interface SetRouteResult {
 export interface AudioRoutePlugin {
   getAvailableRoutes(): Promise<GetRoutesResult>;
   setRoute(options: { route: AudioRouteId }): Promise<SetRouteResult>;
+  requestBluetoothPermission?(): Promise<void>;
+  hasBluetoothPermission?(): Promise<{ granted: boolean }>;
   addListener(
     eventName: "audioRouteChanged",
     listenerFunc: (state: GetRoutesResult) => void

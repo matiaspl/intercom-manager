@@ -11,12 +11,15 @@ import android.content.IntentFilter;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import androidx.core.app.ActivityCompat;
 import com.getcapacitor.PluginMethod;
 
 @CapacitorPlugin(name = "AudioRoute")
@@ -56,6 +59,37 @@ public class AudioRoutePlugin extends Plugin {
         try {
             if (routeReceiver != null) getContext().unregisterReceiver(routeReceiver);
         } catch (Exception ignored) {}
+    }
+
+    @PluginMethod
+    public void hasBluetoothPermission(com.getcapacitor.PluginCall call) {
+        boolean granted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            granted = ActivityCompat.checkSelfPermission(
+                    getContext(),
+                    Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED;
+        }
+        JSObject ret = new JSObject();
+        ret.put("granted", granted);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestBluetoothPermission(com.getcapacitor.PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ActivityCompat.checkSelfPermission(
+                    getContext(),
+                    Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                        getActivity(),
+                        new String[]{Manifest.permission.BLUETOOTH_CONNECT},
+                        1003
+                );
+            }
+        }
+        call.resolve();
     }
 
     @PluginMethod

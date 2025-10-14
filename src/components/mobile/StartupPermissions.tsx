@@ -3,8 +3,9 @@ import { Capacitor } from "@capacitor/core";
 import { isMobileApp } from "../../platform";
 import { OverlayBubble } from "../../mobile-overlay/bubble";
 import { CallService } from "../../mobile-overlay/call-service";
+import { AudioRoute } from "../../mobile-overlay/audio-route";
 
-type Step = "idle" | "overlay" | "notifications" | "done";
+type Step = "idle" | "overlay" | "notifications" | "bluetooth" | "done";
 
 const Bar = ({ children }: { children: React.ReactNode }) => (
   <div
@@ -56,6 +57,7 @@ const Button = ({
 export const StartupPermissions = () => {
   const [step, setStep] = useState<Step>("idle");
   const [busy, setBusy] = useState(false);
+  const [needsBt, setNeedsBt] = useState(false);
 
   const isAndroid = useMemo(() => Capacitor.getPlatform?.() === "android", []);
 
@@ -72,6 +74,14 @@ export const StartupPermissions = () => {
       }
     } catch {
       // If probe fails, still attempt to request notifications next
+    }
+    try {
+      const bt =
+        (await AudioRoute.hasBluetoothPermission?.()) ??
+        Promise.resolve({ granted: true });
+      setNeedsBt(!(bt as any).granted);
+    } catch {
+      setNeedsBt(false);
     }
     setStep("notifications");
   }, []);
@@ -138,10 +148,32 @@ export const StartupPermissions = () => {
               ]);
             } catch {}
             setBusy(false);
-            setStep("done");
+            setStep(needsBt ? "bluetooth" : "done");
           }}
         >
           Allow notifications
+        </Button>
+      </Bar>
+    );
+  }
+
+  if (step === "bluetooth" && isAndroid) {
+    return (
+      <Bar>
+        <span>Allow Bluetooth permission to enable headset routing.</span>
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await (AudioRoute.requestBluetoothPermission?.() ??
+                Promise.resolve());
+            } catch {}
+            setBusy(false);
+            setStep("done");
+          }}
+        >
+          Allow Bluetooth
         </Button>
       </Bar>
     );
