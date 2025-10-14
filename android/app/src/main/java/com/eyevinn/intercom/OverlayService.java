@@ -61,10 +61,27 @@ public class OverlayService extends Service {
             );
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.createNotificationChannel(channel);
+            int flags = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                    ? (android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE)
+                    : android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+
+            android.content.Intent openIntent = new android.content.Intent(this, MainActivity.class);
+            openIntent.setAction("com.eyevinn.intercom.OPEN");
+            openIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            android.app.PendingIntent openPI = android.app.PendingIntent.getActivity(this, 2101, openIntent, flags);
+
+            android.content.Intent exitIntent = new android.content.Intent(this, MainActivity.class);
+            exitIntent.setAction("com.eyevinn.intercom.EXIT");
+            exitIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            android.app.PendingIntent exitPI = android.app.PendingIntent.getActivity(this, 2102, exitIntent, flags);
+
             Notification notification = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("Intercom controls active")
                     .setSmallIcon(android.R.drawable.ic_media_play)
                     .setOngoing(true)
+                    .setContentIntent(openPI)
+                    .addAction(0, "Open", openPI)
+                    .addAction(0, "Exit", exitPI)
                     .build();
             startForeground(1, notification);
         }

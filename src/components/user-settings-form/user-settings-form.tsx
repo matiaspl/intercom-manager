@@ -29,7 +29,6 @@ import {
 } from "../../mobile-overlay/audio-route";
 import { OverlayBubble } from "../../mobile-overlay/bubble";
 import { DebugPanel } from "../mobile/DebugPanel";
-import { AppControl } from "../../mobile-overlay/app-control";
 import { ReloadDevicesButton } from "../reload-devices-button.tsx/reload-devices-button";
 import { TUserSettings } from "../user-settings/types";
 import { ConfirmationModal } from "../verify-decision/confirmation-modal";
@@ -301,40 +300,6 @@ export const UserSettingsForm = ({
               type="button"
               onClick={async () => {
                 try {
-                  const granted = await OverlayBubble.canDrawOverlays();
-                  if (!granted.granted) {
-                    await OverlayBubble.openOverlayPermission();
-                  }
-                  // Bubble will auto-show only when app is minimized and a call is active
-                  try {
-                    const r = await OverlayBubble.canDrawOverlays();
-                    setOverlayGranted(!!r?.granted);
-                    const s = await OverlayBubble.isRunning();
-                    setOverlayRunning(!!s?.running);
-                  } catch (_) {}
-                } catch (_) {}
-              }}
-            >
-              Enable Bubble
-            </PrimaryButton>
-            <PrimaryButton
-              type="button"
-              onClick={async () => {
-                try {
-                  await OverlayBubble.hide();
-                } catch (_) {}
-                try {
-                  const s = await OverlayBubble.isRunning();
-                  setOverlayRunning(!!s?.running);
-                } catch (_) {}
-              }}
-            >
-              Disable Bubble
-            </PrimaryButton>
-            <PrimaryButton
-              type="button"
-              onClick={async () => {
-                try {
                   await OverlayBubble.openOverlayPermission();
                 } catch (_) {}
               }}
@@ -343,39 +308,9 @@ export const UserSettingsForm = ({
             </PrimaryButton>
             <PrimaryButton
               type="button"
-              onClick={async () => {
-                try {
-                  await OverlayBubble.requestNotificationPermission();
-                } catch (_) {}
-              }}
-            >
-              Grant Notification Permission
-            </PrimaryButton>
-            <PrimaryButton
-              type="button"
               onClick={() => setShowDebug((v) => !v)}
             >
               {showDebug ? "Hide Debug Info" : "Show Debug Info"}
-            </PrimaryButton>
-            <PrimaryButton
-              type="button"
-              onClick={async () => {
-                try {
-                  await AppControl.stopServices();
-                } catch (_) {}
-              }}
-            >
-              Stop Services
-            </PrimaryButton>
-            <PrimaryButton
-              type="button"
-              onClick={async () => {
-                try {
-                  await AppControl.exitApp();
-                } catch (_) {}
-              }}
-            >
-              Exit App
             </PrimaryButton>
             <div style={{ alignSelf: "center", opacity: 0.85 }}>
               Plugin:{" "}

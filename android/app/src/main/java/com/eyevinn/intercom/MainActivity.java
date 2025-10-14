@@ -6,10 +6,12 @@ import android.util.Log;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
+import android.content.Intent;
+import android.os.Build;
 
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
+    public class MainActivity extends BridgeActivity {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
         // Register in-app Capacitor plugins BEFORE bridge init
         try {
             Log.i("Intercom", "Registering native plugins");
@@ -25,5 +27,25 @@ public class MainActivity extends BridgeActivity {
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        String action = intent.getAction();
+        if ("com.eyevinn.intercom.EXIT".equals(action)) {
+            try {
+                // Attempt to stop foreground services first
+                try { stopService(new Intent(this, OverlayService.class)); } catch (Exception ignored) {}
+                try { stopService(new Intent(this, CallService.class)); } catch (Exception ignored) {}
+            } catch (Exception ignored) {}
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                finishAndRemoveTask();
+            } else {
+                finish();
+            }
+        }
+        // 'OPEN' action is handled by OS bringing the activity to foreground via contentIntent
     }
 }
