@@ -97,6 +97,22 @@ public class AudioRoutePlugin extends Plugin {
 
     private String getActiveRoute() {
         if (audioManager == null) return null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioDeviceInfo dev = audioManager.getCommunicationDevice();
+            if (dev != null) {
+                int t = dev.getType();
+                if (t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) return "bluetooth";
+                if (t == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) return "speaker";
+                if (t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || t == AudioDeviceInfo.TYPE_WIRED_HEADSET) return "headset";
+                if (t == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) return "earpiece";
+            }
+        }
+        return getActiveRouteLegacy();
+    }
+
+    @SuppressWarnings("deprecation")
+    private String getActiveRouteLegacy() {
+        // Best-effort for pre-S devices
         if (audioManager.isBluetoothScoOn() || audioManager.isBluetoothA2dpOn()) return "bluetooth";
         if (audioManager.isSpeakerphoneOn()) return "speaker";
         if (isWiredHeadsetOn()) return "headset";
@@ -117,6 +133,7 @@ public class AudioRoutePlugin extends Plugin {
         return true;
     }
 
+    @SuppressWarnings("deprecation")
     private boolean isWiredHeadsetOn() {
         if (audioManager == null) return false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -131,44 +148,80 @@ public class AudioRoutePlugin extends Plugin {
 
     private boolean isBluetoothOn() {
         if (audioManager == null) return false;
-        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        boolean btConnected = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            for (AudioDeviceInfo d : devices) {
+                int t = d.getType();
+                if (t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) return true;
+            }
+            return false;
+        }
+        // Pre-M: use BluetoothManager to infer connection state
+        android.bluetooth.BluetoothManager bm = (android.bluetooth.BluetoothManager) getContext().getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
         if (adapter != null) {
             int a2dp = adapter.getProfileConnectionState(BluetoothProfile.A2DP);
             int headset = adapter.getProfileConnectionState(BluetoothProfile.HEADSET);
-            btConnected = a2dp == BluetoothProfile.STATE_CONNECTED || headset == BluetoothProfile.STATE_CONNECTED;
+            return a2dp == BluetoothProfile.STATE_CONNECTED || headset == BluetoothProfile.STATE_CONNECTED;
         }
-        return btConnected || audioManager.isBluetoothScoOn() || audioManager.isBluetoothA2dpOn();
+        return false;
     }
 
     @PluginMethod
+    @SuppressWarnings("deprecation")
     public void setRoute(PluginCall call) {
         if (audioManager == null) { call.reject("AudioManager not available"); return; }
         String route = call.getString("route");
         if (route == null) { call.reject("Missing 'route'"); return; }
 
         switch (route) {
-            case "speaker":
-                audioManager.stopBluetoothSco();
-                audioManager.setBluetoothScoOn(false);
-                audioManager.setSpeakerphoneOn(true);
+            case "speaker": {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setCommDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
+                } else {
+                    audioManager.stopBluetoothSco();
+                    audioManager.setBluetoothScoOn(false);
+                    audioManager.setSpeakerphoneOn(true);
+                }
                 break;
-            case "earpiece":
-                audioManager.stopBluetoothSco();
-                audioManager.setBluetoothScoOn(false);
-                audioManager.setSpeakerphoneOn(false);
+            }
+            case "earpiece": {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setCommDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
+                } else {
+                    audioManager.stopBluetoothSco();
+                    audioManager.setBluetoothScoOn(false);
+                    audioManager.setSpeakerphoneOn(false);
+                }
                 break;
-            case "headset":
-                // Let system route to wired headset if plugged; ensure speaker is off
-                audioManager.stopBluetoothSco();
-                audioManager.setBluetoothScoOn(false);
-                audioManager.setSpeakerphoneOn(false);
+            }
+            case "headset": {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // Prefer wired headset/headphones
+                    if (!setCommDeviceByType(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)) {
+                        setCommDeviceByType(AudioDeviceInfo.TYPE_WIRED_HEADSET);
+                    }
+                } else {
+                    // Let system route to wired headset if plugged; ensure speaker is off
+                    audioManager.stopBluetoothSco();
+                    audioManager.setBluetoothScoOn(false);
+                    audioManager.setSpeakerphoneOn(false);
+                }
                 break;
-            case "bluetooth":
-                audioManager.startBluetoothSco();
-                audioManager.setBluetoothScoOn(true);
-                audioManager.setSpeakerphoneOn(false);
+            }
+            case "bluetooth": {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // Prefer SCO for comms, fallback to A2DP if needed
+                    if (!setCommDeviceByType(AudioDeviceInfo.TYPE_BLUETOOTH_SCO)) {
+                        setCommDeviceByType(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP);
+                    }
+                } else {
+                    audioManager.startBluetoothSco();
+                    audioManager.setBluetoothScoOn(true);
+                    audioManager.setSpeakerphoneOn(false);
+                }
                 break;
+            }
             default:
                 call.reject("Unknown route: " + route);
                 return;
@@ -178,5 +231,17 @@ public class AudioRoutePlugin extends Plugin {
         ret.put("active", getActiveRoute());
         call.resolve(ret);
         emitRoutes();
+    }
+
+    private boolean setCommDeviceByType(int type) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioDeviceInfo[] outs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            for (AudioDeviceInfo d : outs) {
+                if (d.getType() == type) {
+                    return audioManager.setCommunicationDevice(d);
+                }
+            }
+        }
+        return false;
     }
 }

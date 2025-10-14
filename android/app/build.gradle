@@ -1,24 +1,24 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.eyevinn.intercom"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "com.eyevinn.intercom"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.eyevinn.intercom"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        applicationId = "com.eyevinn.intercom"
+        minSdk = rootProject.ext.minSdkVersion
+        targetSdk = rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -51,4 +51,12 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Enable detailed Java deprecation/unchecked warnings to ease maintenance
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += [
+            '-Xlint:deprecation',
+            '-Xlint:unchecked'
+    ]
 }

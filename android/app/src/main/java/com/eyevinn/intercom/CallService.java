@@ -42,6 +42,15 @@ public class CallService extends Service {
     public void onDestroy() {
         super.onDestroy();
         running = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(Service.STOP_FOREGROUND_REMOVE);
+        } else {
+            stopFgCompat();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void stopFgCompat() {
         stopForeground(true);
     }
 

@@ -70,9 +70,13 @@ public class OverlayService extends Service {
         }
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
+        int type;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            // TYPE_PHONE is required pre-O for system alert windows
+            type = legacyOverlayType();
+        }
 
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -169,6 +173,11 @@ public class OverlayService extends Service {
             }
         };
         registerReceiver(updateReceiver, new android.content.IntentFilter(ACTION_UPDATE));
+    }
+
+    @SuppressWarnings("deprecation")
+    private static int legacyOverlayType() {
+        return WindowManager.LayoutParams.TYPE_PHONE;
     }
 
     @Override
@@ -332,10 +341,17 @@ public class OverlayService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (overlayView != null) windowManager.removeView(overlayView);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            stopForeground(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(Service.STOP_FOREGROUND_REMOVE);
+        } else {
+            stopFgCompat();
         }
         isRunning = false;
         try { if (updateReceiver != null) unregisterReceiver(updateReceiver); } catch (Exception ignored) {}
+    }
+
+    @SuppressWarnings("deprecation")
+    private void stopFgCompat() {
+        stopForeground(true);
     }
 }
