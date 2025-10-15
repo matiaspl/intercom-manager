@@ -40,7 +40,7 @@ public class CallService extends Service {
         android.app.PendingIntent exitPI = android.app.PendingIntent.getActivity(this, 2002, exitIntent, flags);
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Intercom call in progress")
+                .setContentTitle("Intercom running")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setOngoing(true)
                 .setContentIntent(openPI)

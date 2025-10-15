@@ -8,26 +8,26 @@ export const CallServiceManager = () => {
 
   useEffect(() => {
     if (!isMobileApp()) return;
+    let mounted = true;
     (async () => {
       try {
         await CallService.requestNotificationPermission();
+        if (mounted) await CallService.start();
       } catch (_) {}
     })();
+    return () => {
+      mounted = false;
+      (async () => {
+        try {
+          await CallService.stop();
+        } catch (_) {}
+      })();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!isMobileApp()) return;
-    const calls = Object.keys(state.calls || {}).length;
-    (async () => {
-      try {
-        if (calls > 0) {
-          await CallService.start();
-        } else {
-          await CallService.stop();
-        }
-      } catch (_) {}
-    })();
-  }, [state.calls]);
+  // Keep file subscribed to state to avoid tree-shaking in prod
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  state.calls;
 
   return null;
 };

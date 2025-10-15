@@ -5,7 +5,13 @@ import { OverlayBubble } from "../../mobile-overlay/bubble";
 import { CallService } from "../../mobile-overlay/call-service";
 import { AudioRoute } from "../../mobile-overlay/audio-route";
 
-type Step = "idle" | "overlay" | "notifications" | "bluetooth" | "done";
+type Step =
+  | "idle"
+  | "overlay"
+  | "microphone"
+  | "notifications"
+  | "bluetooth"
+  | "done";
 
 const Bar = ({ children }: { children: React.ReactNode }) => (
   <div
@@ -75,6 +81,21 @@ export const StartupPermissions = () => {
     } catch {
       // If probe fails, still attempt to request notifications next
     }
+    // Microphone first (needed for calls)
+    try {
+      const micPerm = (navigator as any).permissions?.query
+        ? await (navigator as any).permissions.query({ name: "microphone" })
+        : null;
+      if (!micPerm || micPerm.state !== "granted") {
+        setStep("microphone");
+        return;
+      }
+    } catch {
+      // If permissions API not available, we will ask explicitly
+      setStep("microphone");
+      return;
+    }
+
     try {
       const bt =
         (await AudioRoute.hasBluetoothPermission?.()) ??
@@ -181,3 +202,28 @@ export const StartupPermissions = () => {
 
   return null;
 };
+if (step === "microphone") {
+  return (
+    <Bar>
+      <span>Allow microphone access to talk and listen.</span>
+      <Button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
+            try {
+              stream.getTracks().forEach((t) => t.stop());
+            } catch {}
+          } catch {}
+          setBusy(false);
+          setStep("notifications");
+        }}
+      >
+        Allow microphone
+      </Button>
+    </Bar>
+  );
+}
