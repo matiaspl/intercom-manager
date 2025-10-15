@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
 import { MicMuted, MicUnmuted } from "../../assets/icons/icon";
-import { isMobile, isTablet } from "../../bowser";
+import { isMobile } from "../../bowser";
 import { PrimaryButton, SecondaryButton } from "../form-elements/form-elements";
 import { ConnectToWSButton } from "./connect-to-ws-button";
 import { useGlobalMuteToggle } from "./use-global-mute-toggle";
@@ -78,7 +78,7 @@ export const HeaderActions = ({
 
   return (
     <HeaderButtons>
-      {!isEmpty && !isMobile && !isTablet && (
+      {!isEmpty && (
         <ConnectToWSButton
           callActionHandlers={callActionHandlers}
           callIndexMap={callIndexMap}

@@ -120,7 +120,7 @@ export const StartupPermissions = () => {
       if (step !== "overlay") return;
       try {
         const r = await OverlayBubble.canDrawOverlays();
-        if (r?.granted) setStep("notifications");
+        if (r?.granted) evaluate();
       } catch {}
     };
     document.addEventListener("visibilitychange", onVis);
@@ -147,6 +147,32 @@ export const StartupPermissions = () => {
           }}
         >
           Open settings
+        </Button>
+      </Bar>
+    );
+  }
+
+  if (step === "microphone") {
+    return (
+      <Bar>
+        <span>Allow microphone access to talk and listen.</span>
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+              });
+              try {
+                stream.getTracks().forEach((t) => t.stop());
+              } catch {}
+            } catch {}
+            setBusy(false);
+            setStep("notifications");
+          }}
+        >
+          Allow microphone
         </Button>
       </Bar>
     );
@@ -202,28 +228,3 @@ export const StartupPermissions = () => {
 
   return null;
 };
-if (step === "microphone") {
-  return (
-    <Bar>
-      <span>Allow microphone access to talk and listen.</span>
-      <Button
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-            });
-            try {
-              stream.getTracks().forEach((t) => t.stop());
-            } catch {}
-          } catch {}
-          setBusy(false);
-          setStep("notifications");
-        }}
-      >
-        Allow microphone
-      </Button>
-    </Bar>
-  );
-}
