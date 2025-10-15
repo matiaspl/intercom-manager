@@ -76,7 +76,10 @@ export const ConnectToWsModal = ({
   onClose,
 }: ConnectToWsModalProps) => {
   const [hostPort, setHostPort] = useState<string>("");
-  const PROTOCOL = "ws://";
+  const PROTOCOL =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "wss://"
+      : "ws://";
 
   if (!isOpen) return null;
 

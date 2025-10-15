@@ -4,6 +4,7 @@ import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.WebView;
+import android.webkit.WebSettings;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
 import android.content.Intent;
@@ -26,6 +27,18 @@ import android.os.Build;
         // Enable WebView remote debugging only for debuggable builds
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true);
+        }
+
+        // Allow mixed content so ws:// endpoints can be used when the app runs over https://localhost
+        // Note: Prefer WSS in production. This relaxes Chromium's mixed content policy inside WebView.
+        try {
+            WebView wv = this.bridge.getWebView();
+            if (wv != null) {
+                WebSettings ws = wv.getSettings();
+                ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            }
+        } catch (Exception e) {
+            Log.w("Intercom", "Failed to set mixed content mode: " + e.getMessage());
         }
     }
 
