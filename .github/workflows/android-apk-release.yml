@@ -40,19 +40,27 @@ jobs:
       - name: Sync Capacitor Android
         run: yarn android:build
 
-      - name: Assemble release APK
+      - name: Assemble release APKs (ABI splits)
         run: |
           cd android
           ./gradlew --no-daemon assembleRelease
 
-      - name: Rename APK to open-intercom.apk
+      - name: Collect and rename APK artifacts
         run: |
           set -euo pipefail
-          APK=$(ls -1 android/app/build/outputs/apk/release/*.apk | head -n 1)
-          echo "Using APK: $APK"
-          cp "$APK" android/app/build/outputs/apk/release/open-intercom.apk
+          ls -la android/app/build/outputs/apk/release || true
+          ARM64=$(ls -1 android/app/build/outputs/apk/release/*arm64-v8a*.apk | head -n 1 || true)
+          ARMV7=$(ls -1 android/app/build/outputs/apk/release/*armeabi-v7a*.apk | head -n 1 || true)
+          UNIVERSAL=$(ls -1 android/app/build/outputs/apk/release/*universal*.apk | head -n 1 || true)
+          if [ -n "${ARM64}" ]; then cp "$ARM64" android/app/build/outputs/apk/release/open-intercom-arm64-v8a.apk; fi
+          if [ -n "${ARMV7}" ]; then cp "$ARMV7" android/app/build/outputs/apk/release/open-intercom-armeabi-v7a.apk; fi
+          if [ -n "${UNIVERSAL}" ]; then cp "$UNIVERSAL" android/app/build/outputs/apk/release/open-intercom-universal.apk; fi
+          echo "Artifacts in release dir:" && ls -la android/app/build/outputs/apk/release
 
-      - name: Upload APK to GitHub Release
+      - name: Upload APKs to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: android/app/build/outputs/apk/release/open-intercom.apk
+          files: |
+            android/app/build/outputs/apk/release/open-intercom-arm64-v8a.apk
+            android/app/build/outputs/apk/release/open-intercom-armeabi-v7a.apk
+            android/app/build/outputs/apk/release/open-intercom-universal.apk
