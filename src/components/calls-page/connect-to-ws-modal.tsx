@@ -76,10 +76,8 @@ export const ConnectToWsModal = ({
   onClose,
 }: ConnectToWsModalProps) => {
   const [hostPort, setHostPort] = useState<string>("");
-  const PROTOCOL =
-    typeof window !== "undefined" && window.location.protocol === "https:"
-      ? "wss://"
-      : "ws://";
+  // Companion serves ws:// only (both mobile and web), so always use ws://
+  const PROTOCOL = "ws://";
 
   if (!isOpen) return null;
 
