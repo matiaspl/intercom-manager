@@ -123,7 +123,7 @@ export const apiWhep: FastifyPluginCallback<ApiWhepOptions> = (
           true, // audio
           false, // no data channel needed for WHEP
           true, // iceControlling
-          'ssrc-rewrite', // relayType
+          'mixed', // relayType
           parseInt(opts.endpointIdleTimeout, 10)
         );
 
