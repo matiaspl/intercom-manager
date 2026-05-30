@@ -31,7 +31,47 @@ interface AudioAllocationRequest {
   idleTimeout?: number;
 }
 
-export class SmbProtocol {
+export interface ISmbProtocol {
+  allocateConference(smbUrl: string, smbKey: string): Promise<string>;
+  allocateEndpoint(
+    smbUrl: string,
+    conferenceId: string,
+    endpointId: string,
+    audio: boolean,
+    data: boolean,
+    iceControlling: boolean,
+    relayType: 'ssrc-rewrite' | 'forwarder' | 'mixed',
+    idleTimeout: number,
+    smbKey: string
+  ): Promise<SmbEndpointDescription>;
+  allocateAudioEndpoint(
+    smbUrl: string,
+    conferenceId: string,
+    endpointId: string,
+    relayType: 'ssrc-rewrite' | 'forwarder',
+    idleTimeout: number,
+    smbKey: string
+  ): Promise<SmbAudioEndpointDescription>;
+  configureEndpoint(
+    smbUrl: string,
+    conferenceId: string,
+    endpointId: string,
+    endpointDescription: SmbEndpointDescription,
+    smbKey: string
+  ): Promise<void>;
+  getConferences(smbUrl: string, smbKey: string): Promise<string[]>;
+  getConferencesWithUsers(
+    smbUrl: string,
+    smbKey: string
+  ): Promise<Conference[]>;
+  getConference(
+    smbUrl: string,
+    conferenceId: string,
+    smbKey: string
+  ): Promise<DetailedConference[]>;
+}
+
+export class SmbProtocol implements ISmbProtocol {
   async allocateConference(smbUrl: string, smbKey: string): Promise<string> {
     const allocateResponse = await fetch(smbUrl, {
       method: 'POST',
@@ -225,19 +265,28 @@ export class SmbProtocol {
     smbKey: string
   ): Promise<Conference[]> {
     const url = smbUrl + '?brief';
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        ...(smbKey !== '' && { Authorization: `Bearer ${smbKey}` })
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...(smbKey !== '' && { Authorization: `Bearer ${smbKey}` })
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return [];
       }
-    });
 
-    if (!response.ok) {
-      return [];
+      const responseBody: Conference[] =
+        (await response.json()) as Conference[];
+      return responseBody;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const responseBody: Conference[] = (await response.json()) as Conference[];
-    return responseBody;
   }
 
   async getConference(

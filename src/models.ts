@@ -79,17 +79,17 @@ export const AllocateEndpoint = Type.Object({
 });
 
 export const NewProduction = Type.Object({
-  name: Type.String(),
+  name: Type.String({ minLength: 1, maxLength: 200 }),
   lines: Type.Array(
     Type.Object({
-      name: Type.String(),
+      name: Type.String({ minLength: 1, maxLength: 200 }),
       programOutputLine: Type.Optional(Type.Boolean())
     })
   )
 });
 
 export const NewProductionLine = Type.Object({
-  name: Type.String(),
+  name: Type.String({ minLength: 1, maxLength: 200 }),
   programOutputLine: Type.Optional(Type.Boolean())
 });
 
@@ -305,9 +305,9 @@ export const DetailedProductionResponse = Type.Object({
 });
 
 export const NewSession = Type.Object({
-  productionId: Type.String(),
-  lineId: Type.String(),
-  username: Type.String()
+  productionId: Type.String({ minLength: 1, pattern: '^[0-9]+$' }),
+  lineId: Type.String({ minLength: 1 }),
+  username: Type.String({ minLength: 1, maxLength: 200 })
 });
 
 export const SessionResponse = Type.Object({
@@ -325,7 +325,11 @@ export const ErrorResponse = Type.Object({
 });
 
 export const ShareRequest = Type.Object({
-  path: Type.String({ description: 'The application path to share' })
+  path: Type.String({
+    description: 'The application path to share',
+    maxLength: 500,
+    pattern: '^/'
+  })
 });
 export type ShareRequest = Static<typeof ShareRequest>;
 
@@ -396,3 +400,41 @@ export const PatchIngest = Type.Union([
 ]);
 
 export const PatchIngestResponse = Type.Omit(Ingest, ['ipAddress']);
+
+export const PresetCall = Type.Object({
+  productionId: Type.String({ minLength: 1 }),
+  lineId: Type.String({ minLength: 1 }),
+  lineUsedForProgramOutput: Type.Optional(Type.Boolean()),
+  isProgramUser: Type.Optional(Type.Boolean()),
+  lineName: Type.Optional(Type.String())
+});
+
+export const NewPreset = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 200 }),
+  calls: Type.Array(PresetCall, { minItems: 1, maxItems: 20 }),
+  companionUrl: Type.Optional(Type.String())
+});
+
+export const Preset = Type.Object({
+  _id: Type.String(),
+  name: Type.String(),
+  calls: Type.Array(PresetCall),
+  createdAt: Type.String(),
+  companionUrl: Type.Optional(Type.String())
+});
+
+export const PresetListResponse = Type.Object({
+  presets: Type.Array(Preset)
+});
+
+export const UpdatePreset = Type.Object({
+  name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  calls: Type.Optional(Type.Array(PresetCall, { minItems: 0, maxItems: 20 })),
+  companionUrl: Type.Optional(Type.Union([Type.String(), Type.Null()]))
+});
+
+export type PresetCall = Static<typeof PresetCall>;
+export type NewPreset = Static<typeof NewPreset>;
+export type Preset = Static<typeof Preset>;
+export type PresetListResponse = Static<typeof PresetListResponse>;
+export type TUpdatePreset = Static<typeof UpdatePreset>;

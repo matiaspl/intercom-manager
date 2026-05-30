@@ -1,5 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
@@ -8,6 +9,7 @@ import { Static, Type } from '@sinclair/typebox';
 import fastify, { FastifyPluginCallback } from 'fastify';
 import { getApiIngests } from './api_ingests';
 import { ApiProductionsOptions, getApiProductions } from './api_productions';
+import apiGroups from './api_groups';
 import apiReAuth from './api_re_auth';
 import apiShare from './api_share';
 import apiWhip, { ApiWhipOptions } from './api_whip';
@@ -70,11 +72,33 @@ export default async (opts: ApiOptions) => {
   // register the cookie plugin
   api.register(fastifyCookie);
 
-  // register the cors plugin, configure it for better security
+  // register security headers
+  api.register(helmet, {
+    contentSecurityPolicy: false // CSP managed per-deployment
+  });
+
+  // Dynamic CORS: permissive for WHIP/WHEP routes, restrictive for everything else
+  const corsOrigin = process.env.CORS_ORIGIN;
   api.register(cors, {
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Type']
+    delegator: (req, callback) => {
+      const url = req.url || '';
+      if (url.startsWith('/api/v1/whip') || url.startsWith('/api/v1/whep')) {
+        callback(null, {
+          origin: '*',
+          methods: ['POST', 'DELETE', 'PATCH', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization'],
+          exposedHeaders: ['Content-Type', 'Location', 'ETag', 'Link'],
+          preflightContinue: true
+        });
+      } else {
+        callback(null, {
+          origin: corsOrigin ? corsOrigin.split(',') : false,
+          methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization'],
+          exposedHeaders: ['Content-Type', 'Location', 'ETag', 'Link']
+        });
+      }
+    }
   });
 
   await api.register(fastifyRateLimit, {
@@ -104,7 +128,8 @@ export default async (opts: ApiOptions) => {
     smbServerApiKey: opts.smbServerApiKey,
     dbManager: opts.dbManager,
     productionManager: opts.productionManager,
-    coreFunctions: opts.coreFunctions
+    coreFunctions: opts.coreFunctions,
+    smb: opts.smb
   });
   api.register(apiWhip, {
     prefix: 'api/v1',
@@ -114,7 +139,8 @@ export default async (opts: ApiOptions) => {
     coreFunctions: opts.coreFunctions,
     productionManager: opts.productionManager,
     dbManager: opts.dbManager,
-    whipAuthKey: opts.whipAuthKey
+    whipAuthKey: opts.whipAuthKey,
+    smb: opts.smb
   });
   api.register(apiWhep, {
     prefix: 'api/v1',
@@ -123,10 +149,13 @@ export default async (opts: ApiOptions) => {
     smbServerBaseUrl: opts.smbServerBaseUrl,
     coreFunctions: opts.coreFunctions,
     productionManager: opts.productionManager,
-    dbManager: opts.dbManager
+    dbManager: opts.dbManager,
+    whipAuthKey: opts.whipAuthKey,
+    smb: opts.smb
   });
   api.register(apiShare, { publicHost: opts.publicHost, prefix: 'api/v1' });
   api.register(apiReAuth, { prefix: 'api/v1' });
+  api.register(apiGroups, { prefix: 'api/v1', dbManager: opts.dbManager });
 
   api.all('/whip/:productionId/:lineId', async (request, reply) => {
     if (request.method !== 'POST' && request.method !== 'OPTIONS') {

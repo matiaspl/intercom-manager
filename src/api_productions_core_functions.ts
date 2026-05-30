@@ -14,9 +14,10 @@ import {
   RtpCodec,
   RtpHeaderExt
 } from './media_streams_info';
+import { Log } from './log';
 import { LineResponse, Production, SmbEndpointDescription } from './models';
 import { ProductionManager } from './production_manager';
-import { SmbProtocol } from './smb';
+import { ISmbProtocol } from './smb';
 
 export class CoreFunctions {
   private productionManager: ProductionManager;
@@ -70,7 +71,7 @@ export class CoreFunctions {
     const sdpOffer: string = write(offer);
 
     if (sdpOffer) {
-      this.productionManager.createUserSession(
+      await this.productionManager.createUserSession(
         smbConferenceId,
         productionId,
         lineId,
@@ -78,7 +79,7 @@ export class CoreFunctions {
         username,
         false
       );
-      this.productionManager.updateUserEndpoint(
+      await this.productionManager.updateUserEndpoint(
         sessionId,
         endpointId,
         endpoint
@@ -88,7 +89,7 @@ export class CoreFunctions {
   }
 
   async createEndpoint(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string,
     lineId: string,
@@ -117,7 +118,7 @@ export class CoreFunctions {
   async configureEndpointForWhipWhep(
     sdpOffer: SessionDescription,
     endpointDescription: SmbEndpointDescription,
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string,
     smbConferenceId: string,
@@ -504,7 +505,7 @@ export class CoreFunctions {
             media.direction === 'recvonly' ? 'sendonly' : 'recvonly';
           media.ssrcGroups = undefined;
         } else {
-          console.warn(
+          Log().warn(
             'No VP8 codec found in offer video media. Skipping VP8-specific filtering.'
           );
           media.setup = 'active';
@@ -532,7 +533,7 @@ export class CoreFunctions {
   }
 
   async handleAnswerRequest(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string,
     lineId: string,
@@ -560,8 +561,9 @@ export class CoreFunctions {
       );
     }
 
-    if (parsedAnswer.media[1].ssrcs) {
-      let parsedSsrcs = parsedAnswer.media[1].ssrcs[0].id;
+    const audioMedia = parsedAnswer.media.find((m) => m.type === 'audio');
+    if (audioMedia?.ssrcs) {
+      let parsedSsrcs = audioMedia.ssrcs[0].id;
       if (typeof parsedSsrcs === 'string') {
         parsedSsrcs = parseInt(parsedSsrcs, 10);
       }
@@ -637,7 +639,7 @@ export class CoreFunctions {
    * previously created conference IDs, if the function call targets the same line.
    */
   private async createConference(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string,
     productionId: string,
@@ -679,7 +681,7 @@ export class CoreFunctions {
   }
 
   async createConferenceForLine(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string,
     productionId: string,

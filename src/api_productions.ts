@@ -25,7 +25,7 @@ import {
   UserSession
 } from './models';
 import { ProductionManager } from './production_manager';
-import { SmbProtocol } from './smb';
+import { ISmbProtocol, SmbProtocol } from './smb';
 dotenv.config();
 
 export interface ApiProductionsOptions {
@@ -35,6 +35,7 @@ export interface ApiProductionsOptions {
   dbManager: DbManager;
   productionManager: ProductionManager;
   coreFunctions: CoreFunctions;
+  smb?: ISmbProtocol;
 }
 
 function toUserResponse(doc: any) {
@@ -64,6 +65,21 @@ function sortParticipants(participants: UserResponse[]): UserResponse[] {
   });
 }
 
+// ── Param schemas for route validation ──────────────────────────────────
+
+const ProductionIdParams = Type.Object({
+  productionId: Type.String({ minLength: 1, pattern: '^[0-9]+$' })
+});
+
+const ProductionLineParams = Type.Object({
+  productionId: Type.String({ minLength: 1, pattern: '^[0-9]+$' }),
+  lineId: Type.String({ minLength: 1, maxLength: 200 })
+});
+
+const SessionIdParams = Type.Object({
+  sessionId: Type.String({ minLength: 1, maxLength: 200 })
+});
+
 const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
   fastify,
   opts,
@@ -73,17 +89,24 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     '/conferences/',
     opts.smbServerBaseUrl
   ).toString();
-  const smb = new SmbProtocol();
+  const smb = opts.smb || new SmbProtocol();
   const smbServerApiKey = opts.smbServerApiKey || '';
 
   const productionManager = opts.productionManager;
   const coreFunctions = opts.coreFunctions;
   const dbManager = opts.dbManager;
 
-  setInterval(
-    () => productionManager.checkUserStatus(smb, smbServerUrl, smbServerApiKey),
-    2_000
-  );
+  setInterval(async () => {
+    try {
+      await productionManager.checkUserStatus(
+        smb,
+        smbServerUrl,
+        smbServerApiKey
+      );
+    } catch (err) {
+      Log().error('checkUserStatus failed:', err);
+    }
+  }, 2_000);
 
   fastify.post<{
     Body: NewProduction;
@@ -117,9 +140,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to create production: ' + err);
+        reply.code(500).send('Failed to create production');
       }
     }
   );
@@ -223,11 +244,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         });
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send(
-            'Exception thrown when trying to get paginated productions: ' + err
-          );
+        reply.code(500).send('Failed to get productions');
       }
     }
   );
@@ -258,9 +275,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         );
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get productions: ' + err);
+        reply.code(500).send('Failed to get productions');
       }
     }
   );
@@ -273,8 +288,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Retrieves a Production.',
+        params: ProductionIdParams,
         response: {
           200: DetailedProductionResponse,
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -294,9 +311,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         reply.code(200).send(productionResponse);
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get productions: ' + err);
+        reply.code(500).send('Failed to get productions');
       }
     }
   );
@@ -310,6 +325,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Modify an existing Production line.',
+        params: ProductionIdParams,
         body: PatchProduction,
         response: {
           200: PatchProductionResponse,
@@ -328,7 +344,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
             parseInt(productionId, 10)
           );
         } catch (err) {
-          console.warn(
+          Log().warn(
             'Trying to patch a production line in a production that does not exist'
           );
         }
@@ -354,9 +370,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get production: ' + err);
+        reply.code(500).send('Failed to get production');
       }
     }
   );
@@ -369,8 +383,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Retrieves all lines for a Production.',
+        params: ProductionIdParams,
         response: {
           200: Type.Array(LineResponse),
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -406,9 +422,8 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
 
         reply.code(200).send(allLinesResponse);
       } catch (err) {
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get lines: ' + err);
+        Log().error(err);
+        reply.code(500).send('Failed to get lines');
       }
     }
   );
@@ -422,6 +437,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Add a new Line to a Production.',
+        params: ProductionIdParams,
         body: NewProductionLine,
         response: {
           200: Type.Array(LineResponse),
@@ -451,9 +467,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Unhandled exception thrown when trying to add line: ' + err);
+        reply.code(500).send('Failed to add line');
       }
     }
   );
@@ -466,8 +480,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Retrieves an active Production line.',
+        params: ProductionLineParams,
         response: {
           200: LineResponse,
+          400: Type.String(),
           404: ErrorResponse,
           500: Type.String()
         }
@@ -495,7 +511,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           sessionId: (s._id ?? '').toString(),
           endpointId: s.endpointId,
           name: s.name,
-          isActive: s.isWhip ? true : s.isActive,
+          isActive: !!s.isActive,
           isWhip: s.isWhip
         }));
 
@@ -509,9 +525,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         reply.code(200).send(lineResponse);
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get line: ' + err);
+        reply.code(500).send('Failed to get line');
       }
     }
   );
@@ -525,6 +539,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Modify an existing Production line.',
+        params: ProductionLineParams,
         body: PatchLine,
         response: {
           200: PatchLineResponse,
@@ -543,7 +558,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
             parseInt(productionId, 10)
           );
         } catch (err) {
-          console.warn(
+          Log().warn(
             'Trying to patch a production line in a production that does not exist'
           );
         }
@@ -579,9 +594,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get line: ' + err);
+        reply.code(500).send('Failed to get line');
       }
     }
   );
@@ -594,6 +607,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Removes a line from a production.',
+        params: ProductionLineParams,
         response: {
           200: Type.String(),
           400: ErrorResponse,
@@ -630,9 +644,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to get line: ' + err);
+        reply.code(500).send('Failed to get line');
       }
     }
   );
@@ -677,6 +689,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         );
 
         const endpointId: string = uuidv4();
+        const idleTimeout = parseInt(opts.endpointIdleTimeout, 10);
         const endpoint = await coreFunctions.createEndpoint(
           smb,
           smbServerUrl,
@@ -687,7 +700,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           true, // data
           true, // iceControlling
           'ssrc-rewrite', // relayType
-          parseInt(opts.endpointIdleTimeout, 10)
+          isNaN(idleTimeout) ? 60 : idleTimeout
         );
         if (!endpoint.audio) {
           throw new Error('Missing audio when creating sdp offer for endpoint');
@@ -727,9 +740,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         }
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to create endpoint: ' + err);
+        reply.code(500).send('Failed to create endpoint');
       }
     }
   );
@@ -743,8 +754,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
       schema: {
         description:
           'Provide client local SDP description as request body to finalize connection protocol.',
+        params: SessionIdParams,
         response: {
           200: Type.String(),
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -778,8 +791,13 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           lastSeen: Date.now()
         });
 
+        const productionIdNum = parseInt(userSession.productionId, 10);
+        if (isNaN(productionIdNum)) {
+          reply.code(400).send('Invalid production ID in session');
+          return;
+        }
         const production = await productionManager.requireProduction(
-          parseInt(userSession.productionId, 10)
+          productionIdNum
         );
         const line = productionManager.requireLine(
           production.lines,
@@ -806,12 +824,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           connectionEndpointDescription,
           request.body.sdpAnswer
         );
-        reply.code(204);
+        reply.code(204).send();
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to configure endpoint: ' + err);
+        reply.code(500).send('Failed to configure endpoint');
       }
     }
   );
@@ -824,8 +840,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Deletes a Production.',
+        params: ProductionIdParams,
         response: {
           200: Type.String(),
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -843,9 +861,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         reply.code(200).send(`Deleted production ${productionId}`);
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to delete production: ' + err);
+        reply.code(500).send('Failed to delete production');
       }
     }
   );
@@ -858,8 +874,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Deletes a Connection from ProductionManager.',
+        params: SessionIdParams,
         response: {
           200: Type.String(),
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -874,9 +892,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
         reply.code(200).send(`Deleted connection ${sessionId}`);
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send('Exception thrown when trying to delete connection: ' + err);
+        reply.code(500).send('Failed to delete connection');
       }
     }
   );
@@ -890,8 +906,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Long Poll Endpoint to get participant list.',
+        params: ProductionLineParams,
         response: {
           200: Type.Array(UserResponse),
+          400: Type.String(),
           500: Type.String()
         }
       }
@@ -927,19 +945,14 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           sessionId: s._id.toString(),
           endpointId: s.endpointId,
           name: s.name,
-          isActive: s.isWhip ? true : !!s.isActive,
+          isActive: !!s.isActive,
           isWhip: !!s.isWhip
         }));
 
         reply.code(200).send(sortParticipants(participants));
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send(
-            'Exception thrown when trying to set connection status for session: ' +
-              err
-          );
+        reply.code(500).send('Failed to set connection status');
       }
     }
   );
@@ -952,8 +965,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         description: 'Update user session lastSeen',
+        params: SessionIdParams,
         response: {
           200: Type.String(),
+          400: Type.String(),
           410: Type.String()
         }
       }
@@ -972,6 +987,6 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
   next();
 };
 
-export function getApiProductions() {
+export function getApiProductions(): FastifyPluginCallback<ApiProductionsOptions> {
   return apiProductions;
 }

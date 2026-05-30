@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto';
 import { Static, Type } from '@sinclair/typebox';
 import { FastifyPluginCallback } from 'fastify';
 import sdpTransform, { parse } from 'sdp-transform';
@@ -6,7 +7,7 @@ import { CoreFunctions } from './api_productions_core_functions';
 import { Log } from './log';
 import { Line, WhipWhepRequest, WhipWhepResponse } from './models';
 import { ProductionManager } from './production_manager';
-import { SmbProtocol } from './smb';
+import { ISmbProtocol, SmbProtocol } from './smb';
 import { getIceServers } from './utils';
 import { DbManager } from './db/interface';
 
@@ -18,6 +19,7 @@ export interface ApiWhipOptions {
   productionManager: ProductionManager;
   dbManager: DbManager;
   whipAuthKey?: string;
+  smb?: ISmbProtocol;
 }
 
 export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
@@ -48,7 +50,7 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
     opts.smbServerBaseUrl
   ).toString();
 
-  const smb = new SmbProtocol();
+  const smb = opts.smb || new SmbProtocol();
   const smbServerApiKey = opts.smbServerApiKey || '';
   const coreFunctions = opts.coreFunctions;
   const whipAuthKey = opts.whipAuthKey?.trim();
@@ -62,12 +64,15 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
       request.headers['authorization'] || request.headers['Authorization'];
     const prefix = 'Bearer ';
 
-    if (
-      !authHeader ||
-      typeof authHeader !== 'string' ||
-      !authHeader.startsWith(prefix) ||
-      authHeader.slice(prefix.length).trim() !== whipAuthKey //checks if presented key is equal to actual key
-    ) {
+    const token = authHeader?.startsWith?.(prefix)
+      ? authHeader.slice(prefix.length).trim()
+      : '';
+    const tokenBuf = Buffer.from(token);
+    const keyBuf = Buffer.from(whipAuthKey);
+    const isValid =
+      tokenBuf.length === keyBuf.length && timingSafeEqual(tokenBuf, keyBuf);
+
+    if (!authHeader || typeof authHeader !== 'string' || !isValid) {
       reply
         .header('WWW-Authenticate', 'Bearer realm="whip", charset="UTF-8"')
         .code(401)
@@ -86,6 +91,11 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
     {
       schema: {
         description: 'WHIP endpoint for ingesting WebRTC streams',
+        params: Type.Object({
+          productionId: Type.String({ maxLength: 200 }),
+          lineId: Type.String({ maxLength: 200 }),
+          username: Type.String({ maxLength: 200 })
+        }),
         body: WhipWhepRequest,
         response: {
           201: WhipWhepResponse,
@@ -225,20 +235,13 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
           'Content-Type': 'application/sdp',
           Location: locationUrl,
           ETag: sessionId,
-          Link: getIceServers().join(','),
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers':
-            'Content-Type, Authorization, ETag, If-Match, Link',
-          'Access-Control-Expose-Headers': 'Location, ETag, Link'
+          Link: getIceServers().join(',')
         });
 
-        await reply.code(201).send(sdpAnswer);
+        reply.code(201).send(sdpAnswer);
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send({ error: `Failed to process WHIP request: ${err}` });
+        reply.code(500).send({ error: 'Failed to process WHIP request' });
       }
     }
   );
@@ -250,6 +253,11 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
     {
       schema: {
         description: 'Terminate a WHIP connection',
+        params: Type.Object({
+          productionId: Type.String({ maxLength: 200 }),
+          lineId: Type.String({ maxLength: 200 }),
+          sessionId: Type.String({ maxLength: 200 })
+        }),
         response: {
           200: Type.String({ description: 'OK' }),
           404: Type.Object({ error: Type.String() }),
@@ -259,9 +267,8 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
     },
     async (request, reply) => {
       if (!(await requireWhipAuth(request, reply))) return;
+      const { sessionId } = request.params;
       try {
-        const { sessionId } = request.params;
-
         Log().info(
           `Received WHIP DELETE request - sessionId: ${sessionId}, IP: ${request.ip}`
         );
@@ -283,22 +290,13 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
         Log().info(
           `WHIP session deleted successfully - sessionId: ${sessionId}`
         );
-        // Add CORS headers for browser compatibility
-        reply.headers({
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        });
-
         reply.code(200).send('OK');
       } catch (err) {
         Log().error(
-          `Failed to delete WHIP session - sessionId: ${request.params.sessionId}:`,
+          `Failed to delete WHIP session - sessionId: ${sessionId}:`,
           err
         );
-        reply
-          .code(500)
-          .send({ error: `Failed to terminate WHIP connection: ${err}` });
+        reply.code(500).send({ error: 'Failed to terminate WHIP connection' });
       }
     }
   );
@@ -348,20 +346,13 @@ export const apiWhip: FastifyPluginCallback<ApiWhipOptions> = (
         }
 
         reply.headers({
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, ETag',
-          'Access-Control-Expose-Headers': 'Location, ETag, Link',
-          'Access-Control-Max-Age': '86400', // 24 hours
           'Accept-Post': 'application/sdp'
         });
 
         reply.code(200).send('OK');
       } catch (err) {
         Log().error(err);
-        reply
-          .code(500)
-          .send({ error: `Failed to process OPTIONS request: ${err}` });
+        reply.code(500).send({ error: 'Failed to process OPTIONS request' });
       }
     }
   );

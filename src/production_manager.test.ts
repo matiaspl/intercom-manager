@@ -1,3 +1,12 @@
+jest.mock('./log', () => ({
+  Log: () => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn()
+  })
+}));
+
 import {
   NewProduction,
   Production,
@@ -413,5 +422,188 @@ describe('production_manager', () => {
         });
       }
     });
+  });
+});
+
+describe('getUsersForLine', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns actual isActive for WHIP sessions (not hardcoded true)', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    dbManager.getSessionsByQuery.mockResolvedValueOnce([
+      {
+        _id: 'whip_session_1',
+        name: 'OBS Studio',
+        isActive: false,
+        isExpired: false,
+        isWhip: true,
+        endpointId: 'ep-1'
+      }
+    ]);
+
+    const pm = new ProductionManager(dbManager);
+    const users = await pm.getUsersForLine('1', '1');
+
+    expect(users).toHaveLength(1);
+    expect(users[0].isActive).toBe(false);
+    expect(users[0].isWhip).toBe(true);
+  });
+
+  it('returns isActive true for active WHIP sessions', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    dbManager.getSessionsByQuery.mockResolvedValueOnce([
+      {
+        _id: 'whip_session_2',
+        name: 'Hardware Encoder',
+        isActive: true,
+        isExpired: false,
+        isWhip: true,
+        endpointId: 'ep-2'
+      }
+    ]);
+
+    const pm = new ProductionManager(dbManager);
+    const users = await pm.getUsersForLine('1', '1');
+
+    expect(users).toHaveLength(1);
+    expect(users[0].isActive).toBe(true);
+    expect(users[0].isWhip).toBe(true);
+  });
+
+  it('includes endpointId for WHIP sessions that have one', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    dbManager.getSessionsByQuery.mockResolvedValueOnce([
+      {
+        _id: 'whip_session_3',
+        name: 'WHIP Client',
+        isActive: true,
+        isExpired: false,
+        isWhip: true,
+        endpointId: 'ep-abc'
+      },
+      {
+        _id: 'regular_session',
+        name: 'Web User',
+        isActive: true,
+        isExpired: false,
+        isWhip: false
+      }
+    ]);
+
+    const pm = new ProductionManager(dbManager);
+    const users = await pm.getUsersForLine('1', '1');
+
+    expect(users).toHaveLength(2);
+    const whipUser = users.find((u) => u.isWhip);
+    const regularUser = users.find((u) => !u.isWhip);
+    expect(whipUser?.endpointId).toBe('ep-abc');
+    expect(regularUser?.endpointId).toBeUndefined();
+  });
+
+  it('sorts participants by name', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    dbManager.getSessionsByQuery.mockResolvedValueOnce([
+      {
+        _id: 'session_z',
+        name: 'Zara',
+        isActive: true,
+        isExpired: false,
+        isWhip: false
+      },
+      {
+        _id: 'session_a',
+        name: 'Alice',
+        isActive: true,
+        isExpired: false,
+        isWhip: true
+      }
+    ]);
+
+    const pm = new ProductionManager(dbManager);
+    const users = await pm.getUsersForLine('1', '1');
+
+    expect(users[0].name).toBe('Alice');
+    expect(users[1].name).toBe('Zara');
+  });
+});
+
+describe('checkUserStatus resilience', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('Block B (WHIP) runs even when Block A getSessionsByQuery throws', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    // Block A: first getSessionsByQuery (toInactivate) throws a socket error
+    dbManager.getSessionsByQuery
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      // Block B: WHIP sessions query succeeds (empty)
+      .mockResolvedValueOnce([]);
+
+    const smb = {
+      getConferencesWithUsers: jest.fn().mockResolvedValue([])
+    };
+
+    const pm = new ProductionManager(dbManager);
+    // Should not throw — Block A failure is caught internally
+    await expect(
+      pm.checkUserStatus(smb as any, 'http://smb', '')
+    ).resolves.toBeUndefined();
+    // Block B still ran: smb.getConferencesWithUsers was called
+    expect(smb.getConferencesWithUsers).toHaveBeenCalledTimes(1);
+  });
+
+  it('partial updateSession failure in Block A does not prevent other batches', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    const session = {
+      _id: 'session_abc',
+      isActive: true,
+      isExpired: false,
+      lastSeenAt: new Date(Date.now() - 20_000).toISOString()
+    };
+    dbManager.getSessionsByQuery
+      .mockResolvedValueOnce([session]) // toInactivate
+      .mockResolvedValueOnce([]) // toReactivate
+      .mockResolvedValueOnce([]) // toExpire
+      .mockResolvedValueOnce([]); // WHIP sessions (Block B)
+
+    // One updateSession fails
+    dbManager.updateSession.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    const smb = {
+      getConferencesWithUsers: jest.fn().mockResolvedValue([])
+    };
+    const pm = new ProductionManager(dbManager);
+    await expect(
+      pm.checkUserStatus(smb as any, 'http://smb', '')
+    ).resolves.toBeUndefined();
+    // All 4 getSessionsByQuery calls completed (Block A continued past the failure)
+    expect(dbManager.getSessionsByQuery).toHaveBeenCalledTimes(4);
+  });
+
+  it('emits users:change when at least one update in a batch succeeds', async () => {
+    const dbManager = jest.requireMock('./db/interface');
+    const session = {
+      _id: 'session_abc',
+      isActive: true,
+      isExpired: false,
+      lastSeenAt: new Date(Date.now() - 20_000).toISOString()
+    };
+    dbManager.getSessionsByQuery
+      .mockResolvedValueOnce([session]) // toInactivate
+      .mockResolvedValueOnce([]) // toReactivate
+      .mockResolvedValueOnce([]) // toExpire
+      .mockResolvedValueOnce([]); // WHIP sessions
+    dbManager.updateSession.mockResolvedValueOnce(true);
+
+    const smb = {
+      getConferencesWithUsers: jest.fn().mockResolvedValue([])
+    };
+    const pm = new ProductionManager(dbManager);
+    const emitSpy = jest.spyOn(pm, 'emit');
+    await pm.checkUserStatus(smb as any, 'http://smb', '');
+    expect(emitSpy).toHaveBeenCalledWith('users:change');
   });
 });

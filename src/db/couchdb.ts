@@ -1,43 +1,75 @@
 import { Log } from '../log';
-import { Ingest, Line, NewIngest, Production, UserSession } from '../models';
+import {
+  Preset,
+  Ingest,
+  Line,
+  NewIngest,
+  Production,
+  UserSession
+} from '../models';
 import { assert } from '../utils';
 import { DbManager } from './interface';
 import nano from 'nano';
+import { v4 as uuidv4 } from 'uuid';
 
-const SESSION_PRUNE_SECONDS = 60;
-
+const SESSION_PRUNE_SECONDS = 7_200;
 export class DbManagerCouchDb implements DbManager {
   private client;
   private nanoDb: nano.DocumentScope<unknown> | undefined;
   private dbConnectionUrl: URL;
+  private pruneIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(dbConnectionUrl: URL) {
     this.dbConnectionUrl = dbConnectionUrl;
     const server = new URL('/', this.dbConnectionUrl).toString();
-    this.client = nano(server);
+    this.client = nano({
+      url: server,
+      requestDefaults: {
+        timeout: 10000
+      }
+    });
   }
 
   async connect(): Promise<void> {
     if (!this.nanoDb) {
-      const dbList = await this.client.db.list();
-      Log().debug('List of databases', dbList);
-      const dbName = this.dbConnectionUrl.pathname.replace(/^\//, '');
-      if (!dbList.includes(dbName)) {
-        Log().info('Creating database', dbName);
-        await this.client.db.create(dbName);
+      const maxRetries = 5;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const dbList = await this.client.db.list();
+          Log().debug('List of databases', dbList);
+          const dbName = this.dbConnectionUrl.pathname.replace(/^\//, '');
+          if (!dbList.includes(dbName)) {
+            Log().info('Creating database', dbName);
+            await this.client.db.create(dbName);
+          }
+          Log().info('Using database', dbName);
+          this.nanoDb = this.client.db.use(
+            this.dbConnectionUrl.pathname.replace(/^\//, '')
+          );
+          await this.ensureSessionIndexes();
+          this.sessionPruneInterval();
+          return;
+        } catch (error: any) {
+          if (this.isTransientError(error) && attempt < maxRetries - 1) {
+            const delay = 1000 * Math.pow(2, attempt);
+            Log().warn(
+              `CouchDB connect failed (attempt ${attempt + 1}/${maxRetries}): ${
+                error.message
+              }. Retrying in ${delay}ms...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            throw error;
+          }
+        }
       }
-      Log().info('Using database', dbName);
-      this.nanoDb = this.client.db.use(
-        this.dbConnectionUrl.pathname.replace(/^\//, '')
-      );
-      this.sessionPruneInterval();
     }
   }
 
-  // Couchdb doesn't support collections and cannot create TTL indexes that are automatically handled like in mongodb.
-  // Thereof a seperate interval to track and remove sessions.
+  // This interval is used to track and remove sessions based on 'isExpired' flag, set in production_manager.
+  // Deviates from mongoDB, which handles session pruning based on internal TTL index. This isn't supported by CouchDB.
   private sessionPruneInterval() {
-    setInterval(async () => {
+    this.pruneIntervalId = setInterval(async () => {
       try {
         const cutoff = new Date(
           Date.now() - SESSION_PRUNE_SECONDS * 1000
@@ -47,17 +79,47 @@ export class DbManagerCouchDb implements DbManager {
         });
         for (const session of sessions) {
           const sessionId = session._id;
-          const res = await this.deleteUserSession(sessionId);
+          await this.deleteUserSession(sessionId);
           Log().info(`Terminated session ${sessionId}`);
         }
       } catch (error: any) {
         Log().error(error);
       }
-    }, 60_000); // runs every minute
+    }, 300_000); // runs every 5th minute
   }
 
   async disconnect(): Promise<void> {
-    // CouchDB does not require a disconnection
+    if (this.pruneIntervalId) {
+      clearInterval(this.pruneIntervalId);
+      this.pruneIntervalId = null;
+    }
+  }
+
+  // Generic retry wrapper for all DB operations.
+  // Retries on transient network errors only (not 409 conflicts).
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries = 3
+  ): Promise<T> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        if (this.isTransientError(error) && attempt < maxRetries - 1) {
+          Log().warn(
+            `Transient DB error (attempt ${attempt + 1}/${maxRetries}): ${
+              error.message
+            }`
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, 100 * Math.pow(2, attempt))
+          );
+        } else {
+          throw error;
+        }
+      }
+    }
+    throw new Error('withRetry: exhausted retries');
   }
 
   private async getNextSequence(collectionName: string): Promise<number> {
@@ -65,6 +127,7 @@ export class DbManagerCouchDb implements DbManager {
     if (!this.nanoDb) {
       throw new Error('Database not connected');
     }
+
     const counterDocId = `counter_${collectionName}`;
     interface CounterDoc {
       _id: string;
@@ -74,12 +137,18 @@ export class DbManagerCouchDb implements DbManager {
     let counterDoc: CounterDoc;
 
     try {
-      counterDoc = (await this.nanoDb.get(counterDocId)) as CounterDoc;
+      counterDoc = (await this.withRetry(() =>
+        this.nanoDb!.get(counterDocId)
+      )) as CounterDoc;
       counterDoc.value = (parseInt(counterDoc.value) + 1).toString();
-    } catch (error) {
-      counterDoc = { _id: counterDocId, value: '1' };
+    } catch (error: any) {
+      if (error.statusCode === 404) {
+        counterDoc = { _id: counterDocId, value: '1' };
+      } else {
+        throw error;
+      }
     }
-    await this.nanoDb.insert(counterDoc);
+    await this.withRetry(() => this.nanoDb!.insert(counterDoc));
     return parseInt(counterDoc.value, 10);
   }
 
@@ -90,14 +159,15 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
     const productions: Production[] = [];
-    const response = await this.nanoDb.list({
-      include_docs: true
-    });
+    const response = await this.withRetry(() =>
+      this.nanoDb!.list({ include_docs: true })
+    );
     // eslint-disable-next-line
     response.rows.forEach((row: any) => {
       if (
         row.doc._id.toLowerCase().indexOf('counter') === -1 &&
-        row.doc._id.toLowerCase().indexOf('session_') === -1
+        row.doc._id.toLowerCase().indexOf('session_') === -1 &&
+        row.doc._id.toLowerCase().indexOf('preset_') === -1
       )
         productions.push(row.doc);
     });
@@ -112,12 +182,15 @@ export class DbManagerCouchDb implements DbManager {
     if (!this.nanoDb) {
       throw new Error('Database not connected');
     }
-    const productions = await this.nanoDb.list({ include_docs: false });
-    // Filter out counter and session documents
+    const productions = await this.withRetry(() =>
+      this.nanoDb!.list({ include_docs: false })
+    );
+    // Filter out counter, session, and preset documents
     const filteredRows = productions.rows.filter(
       (row: any) =>
         row.id.toLowerCase().indexOf('counter') === -1 &&
-        row.id.toLowerCase().indexOf('session_') === -1
+        row.id.toLowerCase().indexOf('session_') === -1 &&
+        row.id.toLowerCase().indexOf('preset_') === -1
     );
     return filteredRows.length;
   }
@@ -128,7 +201,9 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const production = await this.nanoDb.get(id.toString());
+    const production = await this.withRetry(() =>
+      this.nanoDb!.get(id.toString())
+    );
     // eslint-disable-next-line
     return production as any | undefined;
   }
@@ -141,13 +216,17 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const existingProduction = await this.nanoDb.get(production._id.toString());
+    const existingProduction = await this.withRetry(() =>
+      this.nanoDb!.get(production._id.toString())
+    );
     const updatedProduction = {
       ...existingProduction,
       ...production,
       _id: production._id.toString()
     };
-    const response = await this.nanoDb.insert(updatedProduction);
+    const response = await this.withRetry(() =>
+      this.nanoDb!.insert(updatedProduction)
+    );
     return response.ok ? production : undefined;
   }
 
@@ -162,8 +241,8 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Failed to get next sequence');
     }
     const insertProduction = { name, lines, _id: _id.toString() };
-    const response = await this.nanoDb.insert(
-      insertProduction as unknown as nano.MaybeDocument
+    const response = await this.withRetry(() =>
+      this.nanoDb!.insert(insertProduction as unknown as nano.MaybeDocument)
     );
     if (!response.ok) throw new Error('Failed to insert production');
     return { name, lines, _id } as Production;
@@ -175,8 +254,12 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const production = await this.nanoDb.get(productionId.toString());
-    const response = await this.nanoDb.destroy(production._id, production._rev);
+    const production = await this.withRetry(() =>
+      this.nanoDb!.get(productionId.toString())
+    );
+    const response = await this.withRetry(() =>
+      this.nanoDb!.destroy(production._id, production._rev)
+    );
     return response.ok;
   }
 
@@ -198,12 +281,16 @@ export class DbManagerCouchDb implements DbManager {
       `Line with id "${lineId}" does not exist for production with id "${productionId}"`
     );
     line.smbConferenceId = conferenceId;
-    const existingProduction = await this.nanoDb.get(productionId.toString());
+    const existingProduction = await this.withRetry(() =>
+      this.nanoDb!.get(productionId.toString())
+    );
     const updatedProduction = {
       ...existingProduction,
       lines: production.lines
     };
-    const response = await this.nanoDb.insert(updatedProduction);
+    const response = await this.withRetry(() =>
+      this.nanoDb!.insert(updatedProduction)
+    );
     assert(
       response.ok,
       `Failed to update production with id "${productionId}"`
@@ -224,8 +311,8 @@ export class DbManagerCouchDb implements DbManager {
       ...newIngest,
       _id: _id.toString()
     };
-    const response = await this.nanoDb.insert(
-      insertIngest as unknown as nano.MaybeDocument
+    const response = await this.withRetry(() =>
+      this.nanoDb!.insert(insertIngest as unknown as nano.MaybeDocument)
     );
     if (!response.ok) throw new Error('Failed to insert ingest');
     return { ...newIngest, _id } as any;
@@ -239,9 +326,9 @@ export class DbManagerCouchDb implements DbManager {
     }
 
     const ingests: Ingest[] = [];
-    const response = await this.nanoDb.list({
-      include_docs: true
-    });
+    const response = await this.withRetry(() =>
+      this.nanoDb!.list({ include_docs: true })
+    );
     // eslint-disable-next-line
     response.rows.forEach((row: any) => {
       if (
@@ -262,7 +349,9 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const ingests = await this.nanoDb.list({ include_docs: false });
+    const ingests = await this.withRetry(() =>
+      this.nanoDb!.list({ include_docs: false })
+    );
     // Filter out counter and session documents
     const filteredRows = ingests.rows.filter(
       (row: any) =>
@@ -278,7 +367,7 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const ingest = await this.nanoDb.get(id.toString());
+    const ingest = await this.withRetry(() => this.nanoDb!.get(id.toString()));
     // eslint-disable-next-line
     return ingest as any | undefined;
   }
@@ -289,13 +378,17 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const existingIngest = await this.nanoDb.get(ingest._id.toString());
+    const existingIngest = await this.withRetry(() =>
+      this.nanoDb!.get(ingest._id.toString())
+    );
     const updatedIngest = {
       ...existingIngest,
       ...ingest,
       _id: ingest._id.toString()
     };
-    const response = await this.nanoDb.insert(updatedIngest);
+    const response = await this.withRetry(() =>
+      this.nanoDb!.insert(updatedIngest)
+    );
     return response.ok ? ingest : undefined;
   }
 
@@ -305,23 +398,52 @@ export class DbManagerCouchDb implements DbManager {
       throw new Error('Database not connected');
     }
 
-    const ingest = await this.nanoDb.get(ingestId.toString());
-    const response = await this.nanoDb.destroy(ingest._id, ingest._rev);
+    const ingest = await this.withRetry(() =>
+      this.nanoDb!.get(ingestId.toString())
+    );
+    const response = await this.withRetry(() =>
+      this.nanoDb!.destroy(ingest._id, ingest._rev)
+    );
     return response.ok;
   }
 
   // Session management methods
 
-  // Helper method, to avoid condlicting _revs on simultaneous update requests
+  private isTransientError(error: any): boolean {
+    const codes = [
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'EPIPE'
+    ];
+    if (error.code && codes.includes(error.code)) return true;
+    if (
+      typeof error.message === 'string' &&
+      error.message.includes('socket hang up')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Helper method, to avoid conflicting _revs on simultaneous update requests.
+  // Also retries on transient socket errors (ECONNRESET, socket hang up, etc).
   private async insertWithRetry(doc: any, maxRetries = 3): Promise<any> {
-    // retries 3 times to fetch the latets doc and _rev, if all fail then throw error
+    if (!this.nanoDb) {
+      throw new Error('Database not connected');
+    }
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        return await this.nanoDb!.insert(doc);
+        return await this.nanoDb.insert(doc);
       } catch (error: any) {
-        if (error.statusCode === 409 && attempt < maxRetries - 1) {
-          const latestDoc = await this.nanoDb!.get(doc._id);
-          doc._rev = latestDoc._rev;
+        const isConflict = error.statusCode === 409;
+        const isTransient = this.isTransientError(error);
+        if ((isConflict || isTransient) && attempt < maxRetries - 1) {
+          if (isConflict) {
+            const latestDoc = await this.nanoDb.get(doc._id);
+            doc = { ...latestDoc, ...doc, _rev: latestDoc._rev };
+          }
           await new Promise((resolve) =>
             setTimeout(resolve, 100 * Math.pow(2, attempt))
           );
@@ -345,30 +467,30 @@ export class DbManagerCouchDb implements DbManager {
       sessionId = `session_${sessionId}`;
     }
 
+    let existingDoc: any;
+
+    // Check if document exists, if not creates new session
     try {
-      let existingDoc: any;
-
-      // Check if document exists, if not set id
-      try {
-        existingDoc = await this.nanoDb.get(sessionId);
-      } catch (err: any) {
-        if (err.statusCode === 404) {
-          existingDoc = { _id: sessionId };
-        } else {
-          throw err;
-        }
+      existingDoc = await this.withRetry(() => this.nanoDb!.get(sessionId));
+    } catch (error: any) {
+      if (error.statusCode === 404) {
+        existingDoc = { _id: sessionId };
+      } else {
+        throw error;
       }
-      const updatedSession = {
-        ...existingDoc,
-        ...userSession,
-        lastSeenAt: new Date(userSession.lastSeen ?? Date.now()).toISOString(),
-        _id: sessionId
-      };
-
-      await this.insertWithRetry(updatedSession);
-    } catch (error) {
-      Log().error(error);
     }
+    const now = new Date();
+    const updatedSession = {
+      ...existingDoc,
+      ...userSession,
+      lastSeenAt: now.toISOString(),
+      _id: sessionId
+    };
+    // Set createdAt only on first insert (like MongoDB's $setOnInsert)
+    if (!existingDoc.createdAt) {
+      updatedSession.createdAt = now.toISOString();
+    }
+    await this.insertWithRetry(updatedSession);
   }
 
   async deleteUserSession(sessionId: string): Promise<boolean> {
@@ -379,15 +501,11 @@ export class DbManagerCouchDb implements DbManager {
     if (!sessionId.startsWith('session')) {
       sessionId = `session_${sessionId}`;
     }
-
-    try {
-      const session = await this.nanoDb.get(sessionId);
-      const response = await this.nanoDb.destroy(session._id, session._rev);
-      return response.ok;
-    } catch (error) {
-      Log().error('Error when deleting user session...', error);
-      return false;
-    }
+    const session = await this.withRetry(() => this.nanoDb!.get(sessionId));
+    const response = await this.withRetry(() =>
+      this.nanoDb!.destroy(session._id, session._rev)
+    );
+    return response.ok;
   }
 
   async getSession(sessionId: string): Promise<UserSession | null> {
@@ -399,17 +517,8 @@ export class DbManagerCouchDb implements DbManager {
     if (!sessionId.startsWith('session')) {
       sessionId = `session_${sessionId}`;
     }
-
-    try {
-      const session = await this.nanoDb.get(sessionId);
-      return session as any as UserSession;
-    } catch (err: any) {
-      if (err.statusCode === 404) {
-        return null;
-      } else {
-        throw err;
-      }
-    }
+    const session = await this.withRetry(() => this.nanoDb!.get(sessionId));
+    return session as any as UserSession;
   }
 
   async updateSession(
@@ -424,33 +533,33 @@ export class DbManagerCouchDb implements DbManager {
     if (!sessionId.startsWith('session')) {
       sessionId = `session_${sessionId}`;
     }
+
+    let doc: any;
     try {
-      const doc = await this.nanoDb.get(sessionId);
-
-      const updateData: any = { ...updates };
-
-      // converts lastSeen to a timestamp
-      if ('lastSeen' in updates && typeof updates.lastSeen === 'number') {
-        updateData.lastSeenAt = new Date(updates.lastSeen).toISOString();
+      doc = await this.withRetry(() => this.nanoDb!.get(sessionId));
+    } catch (error: any) {
+      if (error.statusCode === 404) {
+        return false;
       }
-
-      // to ensure lastSeenAt is a Date object
-      if (
-        'lastSeenAt' in updates &&
-        typeof updates.lastSeenAt !== 'undefined'
-      ) {
-        const v = updates.lastSeenAt as any;
-        updateData.lastSeenAt =
-          v instanceof Date ? v.toISOString() : new Date(v).toISOString();
-      }
-
-      const updated = { ...doc, ...updateData };
-      await this.insertWithRetry(updated);
-
-      return true;
-    } catch (error) {
-      return false;
+      throw error;
     }
+
+    const updateData: any = { ...updates };
+
+    // converts lastSeen to a timestamp
+    if ('lastSeen' in updates && typeof updates.lastSeen === 'number') {
+      updateData.lastSeenAt = new Date(updates.lastSeen).toISOString();
+    }
+
+    // to ensure lastSeenAt is an ISO string Date object.
+    if ('lastSeenAt' in updates && updates.lastSeenAt !== 'undefined') {
+      const v = updates.lastSeenAt as any;
+      updateData.lastSeenAt =
+        v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+    }
+    const updated = { ...doc, ...updateData };
+    const res = await this.insertWithRetry(updated);
+    return res.ok;
   }
 
   async getSessionsByQuery(q: Partial<UserSession>): Promise<UserSession[]> {
@@ -458,9 +567,136 @@ export class DbManagerCouchDb implements DbManager {
     if (!this.nanoDb) {
       throw new Error('Database not connected');
     }
+
     const selector: any = { ...q };
-    delete selector.lastSeen;
-    const response = await this.nanoDb.find({ selector, limit: 10000 });
+    const response = await this.withRetry(() =>
+      this.nanoDb!.find({ selector, limit: 10000 })
+    );
     return response.docs as unknown as UserSession[]; // could also expand type UserSession to avoid unknown
+  }
+
+  async addPreset(preset: Omit<Preset, '_id'>): Promise<Preset> {
+    await this.connect();
+    const _id = `preset_${uuidv4()}`;
+    const doc = { ...preset, _id };
+    await this.withRetry(() => this.nanoDb!.insert(doc as nano.MaybeDocument));
+    return { ...preset, _id };
+  }
+
+  async getPreset(id: string): Promise<Preset | undefined> {
+    await this.connect();
+    try {
+      return (await this.withRetry(() =>
+        this.nanoDb!.get(id)
+      )) as unknown as Preset;
+    } catch (e: any) {
+      if (e.statusCode === 404) return undefined;
+      throw e;
+    }
+  }
+
+  async getPresets(): Promise<Preset[]> {
+    await this.connect();
+    const response = await this.withRetry(() =>
+      this.nanoDb!.list({ include_docs: true })
+    );
+    return response.rows
+      .map((r: any) => r.doc)
+      .filter((d: any) => d._id?.startsWith('preset_'));
+  }
+
+  async deletePreset(id: string): Promise<boolean> {
+    await this.connect();
+    try {
+      const doc = (await this.withRetry(() => this.nanoDb!.get(id))) as any;
+      const res = (await this.withRetry(() =>
+        this.nanoDb!.destroy(doc._id, doc._rev)
+      )) as any;
+      return !!res.ok;
+    } catch (e: any) {
+      if (e.statusCode === 404) return false;
+      throw e;
+    }
+  }
+
+  async updatePreset(
+    id: string,
+    update: {
+      name?: string;
+      calls?: { productionId: string; lineId: string }[];
+      companionUrl?: string | null;
+    }
+  ): Promise<Preset | undefined> {
+    await this.connect();
+    try {
+      const doc = (await this.withRetry(() => this.nanoDb!.get(id))) as any;
+      const { companionUrl, ...rest } = update;
+      const updated = { ...doc, ...rest };
+      if (companionUrl !== undefined) {
+        if (companionUrl === null) {
+          delete updated.companionUrl;
+        } else {
+          updated.companionUrl = companionUrl;
+        }
+      }
+      await this.withRetry(() => this.nanoDb!.insert(updated));
+      return updated as Preset;
+    } catch (e: any) {
+      if (e.statusCode === 404) return undefined;
+      throw e;
+    }
+  }
+
+  async ensureSessionIndexes(): Promise<void> {
+    if (!this.nanoDb) {
+      throw new Error('Database not connected');
+    }
+    // index for toInactivate, toReactivate, toExpire
+    await this.withRetry(() =>
+      (this.nanoDb as any).createIndex({
+        index: {
+          fields: ['isExpired', 'isActive']
+        },
+        name: 'idx_isExpired_isActive',
+        ddoc: 'idx_isExpired_isActive',
+        type: 'json'
+      })
+    );
+
+    // index for getUsersForLine()
+    await this.withRetry(() =>
+      (this.nanoDb as any).createIndex({
+        index: {
+          fields: ['isWhip', 'isExpired']
+        },
+        name: 'idx_isWhip_isExpired',
+        ddoc: 'idx_isWhip_isExpired',
+        type: 'json'
+      })
+    );
+
+    // index for getUsersForLine()
+    await this.withRetry(() =>
+      (this.nanoDb as any).createIndex({
+        index: {
+          fields: ['productionId', 'lineId', 'isExpired']
+        },
+        name: 'idx_prod_line_isExpired',
+        ddoc: 'idx_prod_line_isExpired',
+        type: 'json'
+      })
+    );
+
+    // index for getActiveUsers()
+    await this.withRetry(() =>
+      (this.nanoDb as any).createIndex({
+        index: {
+          fields: ['productionId', 'isActive']
+        },
+        name: 'idx_prod_isActive',
+        ddoc: 'idx_prod_isActive',
+        type: 'json'
+      })
+    );
   }
 }

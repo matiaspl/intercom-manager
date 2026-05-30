@@ -11,10 +11,10 @@ import {
 import { assert } from './utils';
 import { Log } from './log';
 import { DbManager } from './db/interface';
-import { SmbProtocol } from './smb';
+import { ISmbProtocol } from './smb';
 
 const SESSION_INACTIVE_THRESHOLD = 60_000;
-const SESSION_EXPIRED_THRESHOLD = 100_000;
+const SESSION_EXPIRED_THRESHOLD = 100_000; // used to exclude sessions from being returned to client
 
 // Sessions are changed from active to inactive after a minute, and are marked as expired after ~100 s.
 // Long-term pruning now happens via the Mongo TTL index configured with SESSION_PRUNE_SECONDS in mongodb.ts.
@@ -52,16 +52,19 @@ export class ProductionManager extends EventEmitter {
   }
 
   async checkUserStatus(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string
   ) {
     let hasChanged = false;
-    const now = Date.now();
-    const inactiveCutoff = Date.now() - SESSION_INACTIVE_THRESHOLD;
-    const expiredCutoff = Date.now() - SESSION_EXPIRED_THRESHOLD;
 
-    {
+    // Dates are stored as ISO string in couchDB and BSON object in mongoDB.
+    // Querying on Date string will auto-convert to BSON in mongoDB query.
+    const now = Date.now();
+    const inactiveCutoff = new Date(Date.now() - SESSION_INACTIVE_THRESHOLD);
+    const expiredCutoff = new Date(Date.now() - SESSION_EXPIRED_THRESHOLD);
+
+    try {
       // Get sessions that should be inactive
       const toInactivate = await this.dbManager.getSessionsByQuery({
         isWhip: { $ne: true } as any,
@@ -71,12 +74,16 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toInactivate.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toInactivate as any[]).map((s) =>
-            this.dbManager.updateSession(String(s._id), { isActive: false })
+            this.dbManager.updateSession(String(s._id), {
+              isActive: false
+            })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
 
       // Get sessions that should be active
@@ -88,12 +95,14 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toReactivate.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toReactivate as any[]).map((s) =>
             this.dbManager.updateSession(String(s._id), { isActive: true })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
 
       // Get sessions that should be expired
@@ -104,7 +113,7 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toExpire.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toExpire as any[]).map((s) =>
             this.dbManager.updateSession(String(s._id), {
               isExpired: true,
@@ -112,8 +121,12 @@ export class ProductionManager extends EventEmitter {
             })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
+    } catch (e) {
+      Log().warn('checkUserStatus: session lifecycle failed', e);
     }
 
     try {
@@ -224,7 +237,7 @@ export class ProductionManager extends EventEmitter {
         }
       }
     } catch (e) {
-      Log().warn('checkUserStatus (WHIP) failed', e);
+      Log().warn('checkUserStatus failed', e);
     }
 
     if (hasChanged) {
@@ -465,6 +478,7 @@ export class ProductionManager extends EventEmitter {
   ): Promise<UserResponse[]> {
     const inactiveCutoff = new Date(Date.now() - SESSION_INACTIVE_THRESHOLD);
 
+    // Retrievs sessions that has not expired
     const dbSessions = await this.dbManager.getSessionsByQuery({
       productionId,
       lineId,
@@ -476,7 +490,7 @@ export class ProductionManager extends EventEmitter {
       const u: any = {
         sessionId: s._id?.toString?.() ?? '',
         name: s.name ?? '',
-        isActive: s.isWhip ? true : !!s.isActive,
+        isActive: !!s.isActive,
         isWhip: !!s.isWhip
       };
       if (typeof s.endpointId === 'string' && s.endpointId.length > 0)
