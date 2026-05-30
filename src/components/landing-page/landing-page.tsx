@@ -5,6 +5,7 @@ import { UserSettings } from "../user-settings/user-settings.tsx";
 import { UserSettingsButton } from "./user-settings-button.tsx";
 import { TUserSettings } from "../user-settings/types.ts";
 import { isMobile } from "../../bowser.ts";
+import { isAndroidApp } from "../../platform.ts";
 
 export const LandingPage = ({ setApiError }: { setApiError: () => void }) => {
   const [{ apiError, userSettings }] = useGlobalState();
@@ -26,10 +27,13 @@ export const LandingPage = ({ setApiError }: { setApiError: () => void }) => {
 
   const settingsLoaded = userSettings?.username !== undefined;
 
+  const showInlineWebSettings =
+    !isAndroidApp() && (showSettings || !isUserSettingsComplete(userSettings));
+
   return (
     <div>
       {settingsLoaded &&
-        (((showSettings || !isUserSettingsComplete(userSettings)) && (
+        (showInlineWebSettings ? (
           <UserSettings
             buttonText={showSettings ? "Save" : "Next"}
             className={isMobile ? "" : "desktop"}
@@ -37,7 +41,7 @@ export const LandingPage = ({ setApiError }: { setApiError: () => void }) => {
             showBackButton={showSettings}
             onBack={() => setShowSettings(false)}
           />
-        )) || (
+        ) : (
           <>
             <UserSettingsButton
               onClick={() => setShowSettings(!showSettings)}

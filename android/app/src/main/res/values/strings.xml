@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Intercom</string>
+    <string name="title_activity_main">Intercom</string>
+    <string name="package_name">com.eyevinn.intercom</string>
+    <string name="custom_url_scheme">com.eyevinn.intercom</string>
+</resources>

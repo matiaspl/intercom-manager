@@ -5,6 +5,8 @@ type Schema = {
   username: string;
   audioinput?: string;
   audiooutput?: string;
+  backendUrl?: string;
+  backendApiKey?: string;
 };
 
 export function useStorage() {

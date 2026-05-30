@@ -4,4 +4,6 @@ export type TUserSettings = {
   audioinput?: string | "no-device";
   // Not all devices allow choosing output
   audiooutput?: string;
+  backendUrl?: string;
+  backendApiKey?: string;
 };

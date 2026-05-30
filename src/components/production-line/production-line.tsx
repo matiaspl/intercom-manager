@@ -42,6 +42,7 @@ import { useMasterInputMute } from "./use-master-input-mute.ts";
 import { useMuteInput } from "./use-mute-input.tsx";
 import { useUpdateCallDevice } from "./use-update-call-device.tsx";
 import { useVolumeReducer } from "./use-volume-reducer.tsx";
+import { isMobileApp } from "../../platform";
 import { UserControls } from "./user-controls.tsx";
 import { UserList } from "./user-list.tsx";
 
@@ -353,9 +354,26 @@ export const ProductionLine = ({
         handlers[id] = {};
       }
       handlers[id][action] = handler;
+      if (isMobileApp()) {
+        void import("../../mobile-overlay/production-line-bridge").then((m) =>
+          m.registerHandler(id, action, handler)
+        );
+      }
     },
     [callActionHandlers, id]
   );
+
+  useEffect(() => {
+    if (!isMobileApp()) return undefined;
+    void import("../../mobile-overlay/production-line-bridge").then((m) =>
+      m.syncCallState(id, isInputMuted, isOutputMuted)
+    );
+    return () => {
+      void import("../../mobile-overlay/production-line-bridge").then((m) =>
+        m.detachCall(id)
+      );
+    };
+  }, [id, isInputMuted, isOutputMuted]);
 
   useCallActionHandlers({
     value,

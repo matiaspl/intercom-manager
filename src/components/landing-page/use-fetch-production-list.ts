@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { hasConfiguredBackend } from "../../config";
 import { useGlobalState } from "../../global-state/context-provider";
 import { API, TListProductionsResponse } from "../../api/api.ts";
 
@@ -17,10 +18,15 @@ export const useFetchProductionList = (filter?: GetProductionListFilter) => {
   const [{ reloadProductionList }, dispatch] = useGlobalState();
 
   const manageProdPaginationUpdate =
-    filter?.offset !== productions?.offset.toString();
+    filter?.offset !== productions?.offset?.toString();
 
   // TODO improve performance: this makes the call 3 times
   useEffect(() => {
+    if (!hasConfiguredBackend()) {
+      setDoInitialLoad(false);
+      return undefined;
+    }
+
     let aborted = false;
     if (
       reloadProductionList ||

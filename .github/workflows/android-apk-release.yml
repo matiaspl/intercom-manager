@@ -1,0 +1,68 @@
+name: Build Android APK and attach to Release
+
+on:
+  release:
+    types: [released]
+
+permissions:
+  contents: write
+
+jobs:
+  android_apk:
+    name: Build and Upload Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and build web (Android entry)
+        run: npm run build:android
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Assemble release APKs (ABI splits)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Collect and rename APK artifacts
+        run: |
+          set -euo pipefail
+          ls -la android/app/build/outputs/apk/release || true
+          ARM64=$(ls -1 android/app/build/outputs/apk/release/*arm64-v8a*.apk 2>/dev/null | head -n 1 || true)
+          ARMV7=$(ls -1 android/app/build/outputs/apk/release/*armeabi-v7a*.apk 2>/dev/null | head -n 1 || true)
+          UNIVERSAL=$(ls -1 android/app/build/outputs/apk/release/*universal*.apk 2>/dev/null | head -n 1 || true)
+          if [ -n "${ARM64}" ]; then cp "$ARM64" android/app/build/outputs/apk/release/open-intercom-arm64-v8a.apk; fi
+          if [ -n "${ARMV7}" ]; then cp "$ARMV7" android/app/build/outputs/apk/release/open-intercom-armeabi-v7a.apk; fi
+          if [ -n "${UNIVERSAL}" ]; then cp "$UNIVERSAL" android/app/build/outputs/apk/release/open-intercom-universal.apk; fi
+          echo "Artifacts in release dir:" && ls -la android/app/build/outputs/apk/release
+
+      - name: Upload APKs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android/app/build/outputs/apk/release/open-intercom-arm64-v8a.apk
+            android/app/build/outputs/apk/release/open-intercom-armeabi-v7a.apk
+            android/app/build/outputs/apk/release/open-intercom-universal.apk
+          fail_on_unmatched_files: false

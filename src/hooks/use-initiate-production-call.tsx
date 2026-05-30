@@ -35,37 +35,51 @@ export const useInitiateProductionCall = ({
         // Wait for devices to refresh and get the updated devices
         const updatedDevices = await getUpdatedDevices();
 
-        // Only validate devices if enumeration returned results.
-        // On quick page load, permission may not yet be confirmed, causing
-        // getUpdatedDevices() to return empty arrays — skip validation in
-        // that case and let getUserMedia handle truly unavailable devices.
-        // If the stored input device is no longer available, fall back to
-        // the first available device rather than blocking the user.
-        let effectiveAudioInput = payload.joinProductionOptions.audioinput;
+        // Validate and auto-fallback for missing devices.
+        // Only validate if enumeration returned results — on quick page load,
+        // permission may not yet be confirmed so getUpdatedDevices() may return
+        // empty arrays; skip validation in that case.
+        const requestedInput = payload.joinProductionOptions.audioinput;
+        let effectiveAudioInput = requestedInput;
 
         if (updatedDevices.input.length > 0) {
-          const inputDeviceExists = updatedDevices.input.some(
-            (device) => device.deviceId === effectiveAudioInput
-          );
+          const inputDeviceExists =
+            requestedInput === "no-device" ||
+            updatedDevices.input.some((d) => d.deviceId === requestedInput);
 
           if (!inputDeviceExists) {
-            effectiveAudioInput = updatedDevices.input[0].deviceId;
-          }
-
-          const outputDeviceExists = updatedDevices.output.some(
-            (device) => device.deviceId === payload.audiooutput
-          );
-
-          if (!outputDeviceExists && !isBrowserSafari && !isMobile && !isIpad) {
-            dispatch({
-              type: "ERROR",
-              payload: {
-                error: new Error("Selected devices are not available"),
-              },
-            });
-            return false;
+            effectiveAudioInput =
+              updatedDevices.input[0]?.deviceId ?? "no-device";
           }
         }
+
+        const nextJoinOpts: TJoinProductionOptions = {
+          ...payload.joinProductionOptions,
+          audioinput: effectiveAudioInput,
+        };
+
+        const requestedOutput = payload.audiooutput;
+        const outputDeviceExists = updatedDevices.output.some(
+          (device) => device.deviceId === requestedOutput
+        );
+
+        const nextAudioOutput = (() => {
+          if (!isBrowserSafari && !isMobile && !isIpad) {
+            if (!outputDeviceExists && updatedDevices.output.length > 0) {
+              return updatedDevices.output[0].deviceId;
+            }
+            if (
+              updatedDevices.output.length === 0 &&
+              requestedOutput &&
+              !outputDeviceExists
+            ) {
+              return undefined;
+            }
+            return requestedOutput;
+          }
+          // Mobile/Safari: ignore output selection
+          return undefined;
+        })();
 
         const uuid = globalThis.crypto.randomUUID();
 
@@ -74,11 +88,8 @@ export const useInitiateProductionCall = ({
           payload: {
             id: uuid,
             callState: {
-              joinProductionOptions: {
-                ...payload.joinProductionOptions,
-                audioinput: effectiveAudioInput,
-              },
-              audiooutput: payload.audiooutput,
+              joinProductionOptions: nextJoinOpts,
+              audiooutput: nextAudioOutput,
               mediaStreamInput: null,
               dominantSpeaker: null,
               audioLevelAboveThreshold: false,

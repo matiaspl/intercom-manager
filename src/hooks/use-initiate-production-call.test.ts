@@ -206,7 +206,7 @@ describe("useInitiateProductionCall", () => {
   // ── Output device not found (non-Safari) ─────────────────────────────────
 
   describe("output device not found on non-Safari browser", () => {
-    it("returns false and dispatches ERROR when output device is missing", async () => {
+    it("falls back to the first available output device instead of blocking the join", async () => {
       mockGetUpdatedDevices.mockResolvedValue({
         input: [makeDevice("mic1")],
         output: [makeOutputDevice("other-spk")],
@@ -223,17 +223,16 @@ describe("useInitiateProductionCall", () => {
         });
       });
 
-      expect(returnValue).toBe(false);
-      const dispatchMock2 = mockDispatch as unknown as ReturnType<typeof vi.fn>;
-      const errorCall = dispatchMock2.mock.calls.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (call: any[]) => call[0]?.type === "ERROR"
-      );
-      expect(errorCall?.[0].payload.error.message).toBe(
-        "Selected devices are not available"
-      );
-      expect(mockDispatch).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: "ADD_CALL" })
+      expect(returnValue).toBe(true);
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "ADD_CALL",
+          payload: expect.objectContaining({
+            callState: expect.objectContaining({
+              audiooutput: "other-spk",
+            }),
+          }),
+        })
       );
     });
   });

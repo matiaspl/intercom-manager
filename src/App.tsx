@@ -30,6 +30,9 @@ import { CreateProductionPage } from "./components/create-production/create-prod
 import { useSetupTokenRefresh } from "./hooks/use-reauth.tsx";
 import { TUserSettings } from "./components/user-settings/types";
 import { PresetProvider } from "./contexts/preset-context.tsx";
+import { MobileProviders } from "./components/mobile/mobile-extensions";
+import { MobileSettingsPage } from "./components/mobile/MobileSettingsPage";
+import { isMobileApp } from "./platform";
 
 const DisplayBoxPositioningContainer = styled(FlexContainer)`
   justify-content: center;
@@ -90,6 +93,7 @@ const AppContent = ({
     <PresetProvider>
       <BrowserRouter>
         <Header />
+        <MobileProviders />
         <ErrorBanner />
 
         {!isValidBrowser && !continueToApp && (
@@ -149,41 +153,58 @@ const AppContent = ({
             )}
             {permission && !denied && !apiError && userSettings && (
               <Routes>
-                <>
+                <Route
+                  path="/"
+                  element={
+                    <LandingPage setApiError={() => setApiError(true)} />
+                  }
+                  errorElement={<ErrorPage />}
+                />
+                <Route
+                  path="/create"
+                  element={<CreateProductionPage />}
+                  errorElement={<ErrorPage />}
+                />
+                <Route
+                  path="/manage"
+                  element={
+                    <ManageProductionsPage
+                      setApiError={() => setApiError(true)}
+                    />
+                  }
+                  errorElement={<ErrorPage />}
+                />
+                <Route
+                  path="/production-lines/production/:productionId/line/:lineId"
+                  element={<CallsPage />}
+                  errorElement={<ErrorPage />}
+                />
+                <Route
+                  path="/calls"
+                  element={<CallsPage />}
+                  errorElement={<ErrorPage />}
+                />
+                <Route path="/lines" element={<LinesToCallsRedirect />} />
+                {isMobileApp() && (
                   <Route
-                    path="/"
-                    element={
-                      <LandingPage setApiError={() => setApiError(true)} />
-                    }
-                    errorElement={<ErrorPage />}
-                  />
-                  <Route
-                    path="/create"
-                    element={<CreateProductionPage />}
-                    errorElement={<ErrorPage />}
-                  />
-                  <Route
-                    path="/manage"
+                    path="/manage-productions"
                     element={
                       <ManageProductionsPage
                         setApiError={() => setApiError(true)}
                       />
                     }
-                    errorElement={<ErrorPage />}
                   />
+                )}
+                {isMobileApp() && (
                   <Route
-                    path="/production-lines/production/:productionId/line/:lineId"
+                    path="/production-calls/production/:productionId/line/:lineId"
                     element={<CallsPage />}
-                    errorElement={<ErrorPage />}
                   />
-                  <Route
-                    path="/calls"
-                    element={<CallsPage />}
-                    errorElement={<ErrorPage />}
-                  />
-                  <Route path="/lines" element={<LinesToCallsRedirect />} />
-                  <Route path="*" element={<NotFound />} />
-                </>
+                )}
+                {isMobileApp() && (
+                  <Route path="/settings" element={<MobileSettingsPage />} />
+                )}
+                <Route path="*" element={<NotFound />} />
               </Routes>
             )}
           </>
@@ -195,7 +216,7 @@ const AppContent = ({
 
 const App = () => {
   const [unsupportedContinue, setUnsupportedContinue] = useState(false);
-  const continueToApp = isValidBrowser || unsupportedContinue;
+  const continueToApp = isValidBrowser || isMobileApp() || unsupportedContinue;
   const { denied, permission } = useDevicePermissions({ continueToApp });
   const initializedGlobalState = useInitializeGlobalStateReducer();
   const [{ devices, userSettings }, dispatch] = initializedGlobalState;

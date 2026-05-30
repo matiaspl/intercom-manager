@@ -35,7 +35,7 @@ export const useSubmitForm = ({
   productionName?: string;
 }) => {
   const [{ userSettings }, dispatch] = useGlobalState();
-  const { writeToStorage } = useStorage();
+  const { writeToStorage, removeFromStorage } = useStorage();
   const { initiateProductionCall } = useInitiateProductionCall({
     dispatch,
   });
@@ -83,6 +83,8 @@ export const useSubmitForm = ({
         username: payload.username,
         audioinput: payload.audioinput,
         audiooutput: payload.audiooutput,
+        backendUrl: (payload as TUserSettings).backendUrl,
+        backendApiKey: (payload as TUserSettings).backendApiKey,
       };
 
       if (payload.username) {
@@ -95,6 +97,25 @@ export const useSubmitForm = ({
 
       if (payload.audiooutput) {
         writeToStorage("audiooutput", payload.audiooutput);
+      }
+
+      const rawBackendUrl = (payload as TUserSettings).backendUrl?.trim();
+      if (rawBackendUrl) {
+        const sanitized = rawBackendUrl
+          .replace(/^%22|%22$/g, "")
+          .replace(/^\\"|\\"$/g, "")
+          .replace(/^['"]+|['"]+$/g, "");
+        newUserSettings.backendUrl = sanitized;
+        writeToStorage("backendUrl", sanitized);
+      } else {
+        removeFromStorage("backendUrl");
+      }
+
+      const backendApiKey = (payload as TUserSettings).backendApiKey?.trim();
+      if (backendApiKey) {
+        writeToStorage("backendApiKey", backendApiKey);
+      } else {
+        removeFromStorage("backendApiKey");
       }
 
       dispatch({

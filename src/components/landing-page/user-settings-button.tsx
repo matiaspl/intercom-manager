@@ -1,8 +1,10 @@
 import styled from "@emotion/styled";
 import { FC } from "react";
+import { useNavigate } from "react-router";
 import { UserSettingsIcon } from "../../assets/icons/icon";
 import { useStorage } from "../accessing-local-storage/access-local-storage";
 import { isMobile } from "../../bowser";
+import { isAndroidApp } from "../../platform";
 
 const UserSettingsWrapper = styled.div`
   position: absolute;
@@ -45,11 +47,23 @@ interface UserSettingsButtonProps {
 
 export const UserSettingsButton: FC<UserSettingsButtonProps> = (props) => {
   const { onClick } = props;
+  const navigate = useNavigate();
   const { readFromStorage } = useStorage();
   const username = readFromStorage("username") || "Guest";
 
+  const handleClick = () => {
+    if (isAndroidApp()) {
+      navigate("/settings");
+      return;
+    }
+    onClick?.();
+  };
+
   return (
-    <UserSettingsWrapper className={isMobile ? "mobile" : ""} onClick={onClick}>
+    <UserSettingsWrapper
+      className={isMobile ? "mobile" : ""}
+      onClick={handleClick}
+    >
       <Username>{username}</Username>
       <UserSettingsIcon />
     </UserSettingsWrapper>

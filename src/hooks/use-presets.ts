@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { API, TPreset, TPresetCall } from "../api/api";
+import { hasConfiguredBackend } from "../config";
 import { useGlobalState } from "../global-state/context-provider";
 import { useLocalPresets } from "./use-local-presets";
+
+const normalizePresetList = (value: unknown): TPreset[] =>
+  Array.isArray(value) ? value : [];
 
 export const usePresets = () => {
   const [publicPresets, setPublicPresets] = useState<TPreset[]>([]);
@@ -17,21 +21,32 @@ export const usePresets = () => {
   } = useLocalPresets();
 
   useEffect(() => {
+    if (!hasConfiguredBackend()) {
+      setLoading(false);
+      return;
+    }
     API.listPresets()
-      .then((r) => setPublicPresets(r.presets))
+      .then((r) => setPublicPresets(normalizePresetList(r?.presets)))
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!reloadPresetList) return;
+    if (!hasConfiguredBackend()) {
+      dispatch({ type: "PRESET_LIST_FETCHED" });
+      return;
+    }
     dispatch({ type: "PRESET_LIST_FETCHED" });
     API.listPresets()
-      .then((r) => setPublicPresets(r.presets))
+      .then((r) => setPublicPresets(normalizePresetList(r?.presets)))
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
   }, [reloadPresetList, dispatch]);
 
-  const presets: TPreset[] = [...localPresets, ...publicPresets];
+  const presets: TPreset[] = [
+    ...localPresets,
+    ...normalizePresetList(publicPresets),
+  ];
 
   const deletePreset = useCallback(
     async (id: string) => {

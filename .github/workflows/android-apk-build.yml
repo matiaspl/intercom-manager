@@ -1,0 +1,92 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - android-app-v2
+    tags:
+      - "v*"
+      - "android-v*"
+  pull_request:
+    branches:
+      - android-app-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [debug, release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build web (Android entry)
+        run: npm run build:android
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Assemble ${{ matrix.variant }} APKs
+        run: |
+          cd android
+          chmod +x gradlew
+          if [ "${{ matrix.variant }}" = "release" ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: Collect APK artifacts
+        run: |
+          set -euo pipefail
+          VARIANT="${{ matrix.variant }}"
+          OUT="android/app/build/outputs/apk/${VARIANT}"
+          DEST="dist/android-apk-${VARIANT}"
+          mkdir -p "$DEST"
+          shopt -s nullglob
+          for apk in "$OUT"/*.apk; do
+            cp "$apk" "$DEST/"
+          done
+          echo "APKs in ${DEST}:"
+          ls -la "$DEST"
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-intercom-apk-${{ matrix.variant }}-${{ github.sha }}
+          path: dist/android-apk-${{ matrix.variant }}/*.apk
+          if-no-files-found: error
+          retention-days: 30

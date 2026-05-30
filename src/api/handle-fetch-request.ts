@@ -1,18 +1,31 @@
-const isSuccessful = (r: Response) => r.status >= 200 && r.status <= 399;
+import type { ResponseLike } from "../http";
+
+const isSuccessful = (r: { status: number }) =>
+  r.status >= 200 && r.status <= 399;
 
 export const handleFetchRequest = async <T>(
-  fetchRequest: Promise<Response>
+  fetchRequest: Promise<Response | ResponseLike>
 ): Promise<T> => {
-  const response = await fetchRequest;
-  let json = null;
-  let text = null;
+  const response = (await fetchRequest) as Response | ResponseLike;
+  let json: unknown = null;
+  let text: string | null = null;
 
-  const contentType = response.headers.get("content-type");
+  const contentType = response.headers?.get?.("content-type");
 
   if (contentType && contentType.indexOf("text/plain") > -1) {
     text = await response.text();
   } else if (contentType && contentType.indexOf("application/json") > -1) {
     json = await response.json();
+  } else {
+    try {
+      json = await response.json();
+    } catch {
+      try {
+        text = await response.text();
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const isSuccess = isSuccessful(response);
@@ -22,8 +35,13 @@ export const handleFetchRequest = async <T>(
     let err: Error;
     if (text) {
       err = new Error(text);
-    } else if (json && "message" in json) {
-      err = new Error(json.message);
+    } else if (
+      json &&
+      typeof json === "object" &&
+      json !== null &&
+      "message" in json
+    ) {
+      err = new Error(String((json as { message: string }).message));
     } else {
       err = new Error(response.statusText || "Unknown error");
     }
@@ -31,5 +49,5 @@ export const handleFetchRequest = async <T>(
     throw err;
   }
 
-  return text || json;
+  return (text as T) || (json as T);
 };

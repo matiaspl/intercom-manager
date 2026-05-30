@@ -446,8 +446,14 @@ export const CallsPage = () => {
 
   return (
     <>
-      {!isFirstConnection && !isMobile && (
-        <UserSettingsButton onClick={() => setShowSettings(!showSettings)} />
+      {!isFirstConnection && (
+        <UserSettingsButton
+          onClick={() => {
+            if (!isMobile) {
+              setShowSettings(!showSettings);
+            }
+          }}
+        />
       )}
       <PageHeader
         title={!isEmpty ? "Calls" : ""}

@@ -24,6 +24,9 @@ dist-ssr
 *.sw?
 .env
 
+# Android CPU profiles (see scripts/android/README.md)
+profiles/android/*.csv
+
 # Playwright
 test-results/
 playwright-report/
